@@ -53,8 +53,18 @@ async function main() {
             stream: true
         })
 
+        let isfirstChunk = true;
         for await (const chunk of completion) {
             let content = chunk.choices[0]?.delta?.content || ''
+            let reasoning = chunk.choices[0]?.delta?.reasoning_content
+            if (reasoning) {
+                process.stdout.write(`.`)
+                continue;
+            }
+            if (isfirstChunk && content.trim()) {
+                process.stdout.write(`\n`)
+                isfirstChunk = false;
+            }
             outmsg += content
             process.stdout.write(content)
         }
