@@ -1,3 +1,5 @@
+Tool calls should strictly follow the JSON format and only contain that json object in the response. The JSON object must have a "tool" property specifying the tool name and an "input" property containing the parameters for that tool.
+
 Tool Call format:
 ```json
 {"tool": "tool_name", "input": { ... }}

@@ -38,7 +38,7 @@ async function main() {
         isToolCall = false;
         console.log('Tool response: ', toolResponse);
         if (toolResponse) {
-            const confirmation = await askQuestion("Press Enter to send Tool Response to Agent...");
+            const confirmation = await askQuestion("Enter to send (y/n):");
             if (confirmation.toLowerCase() === 'n') {
                 toolResponse = "\nTool response not sent to agent.";
                 console.log("Tool response not sent to agent.");
@@ -111,7 +111,7 @@ async function main() {
             console.log("\nTool call cancelled by user.");
         } else {
             try {
-                const response = await toolCall(toolJson);
+                const response = await toolCall(parsed);
                 toolResponse = `\nTool call result: ${response}`;
             } catch (error) {
                 toolResponse = `\nError executing tool call: ${error.message}`;

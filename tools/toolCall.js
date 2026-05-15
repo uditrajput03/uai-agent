@@ -1,19 +1,8 @@
 import { log } from 'node:console';
 
-export async function toolCall(toolJson) {
-    if (!toolJson || typeof toolJson !== 'string') {
+export async function toolCall(parsed) {
+    if (!parsed || typeof parsed !== 'object') {
         return 'Invalid tool call: no input provided';
-    }
-
-    let parsed;
-    try {
-        parsed = JSON.parse(toolJson);
-    } catch (error) {
-        return `Invalid JSON in tool call: ${error.message}`;
-    }
-
-    if (!parsed.tool || !parsed.input) {
-        return 'Invalid tool call: missing tool or input property';
     }
 
     const tool = parsed.tool.trim();
