@@ -17,7 +17,7 @@ export async function toolCall(toolJson) {
     }
 
     const tool = parsed.tool.trim();
-    const input = parsed.input.trim();
+    const input = parsed.input;
 
     if (process.env.DEBUG === 'true') {
         console.log('Tool Call - tool:', tool);
@@ -27,7 +27,7 @@ export async function toolCall(toolJson) {
     if (tool === 'bash') {
         const { bash } = await import('./bash.js');
         try {
-            const result = await bash(input);
+            const result = await bash(input?.command);
             return result.stdout || result.stderr;
         } catch (error) {
             return `Error executing bash command: ${error.message}`;

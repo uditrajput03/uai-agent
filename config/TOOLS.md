@@ -1,4 +1,27 @@
- You have access to the following tools:
- 
-- bash: Used for executing bash commands on the system. The agent can use this tool to run any command line instructions, scripts, or programs available on the host machine. This is a powerful tool that allows the agent to interact with the operating system, manage files, install software, and perform various tasks that require command line access.
-    - input: A string containing the bash command(s) to be executed. The agent should provide the full command as it would be typed in a terminal, including any necessary flags or arguments.
+Tool Call format:
+```json
+{"tool": "tool_name", "input": { ... }}
+```
+
+## Available Tools
+
+### bash
+Executes shell commands on the host system.
+
+**Parameters:**
+- `command` (string, required): The bash command to execute
+
+**Examples:**
+User: List all files in current directory
+```json
+{"tool": "bash", "input": {"command": "ls -la"}}
+```
+
+User: Find all TypeScript files
+```json
+{"tool": "bash", "input": {"command": "find . -name '*.ts'"}}
+```
+
+**Safety:**
+- Destructive commands (rm -rf, git reset --hard) require explicit user confirmation
+- Blocked commands cannot be executed

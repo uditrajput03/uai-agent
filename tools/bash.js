@@ -91,13 +91,7 @@ function logSecurity(command, status) {
 
 // Sanitize input - remove dangerous characters
 function sanitizeInput(input) {
-    return input
-    return input
-        .replace(/[`$\x00-\x1F\x7F]/g, '')
-        .replace(/\\;/g, ' ')
-        .replace(/\\|/g, ' ')
-        .replace(/\\&/g, ' ')
-        .trim();
+    return input //TODO
 }
 
 export function bash(command, options = {}) {
