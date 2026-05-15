@@ -3,9 +3,20 @@ import 'dotenv/config';
 import fs from 'fs';
 import { askQuestion } from './tools/askQuestion.js';
 import { toolCall } from './tools/toolCall.js';
+import { models } from './models.js';
+import { redact } from './tools/redact.js';
+
+// const provider = 'cloudflare';
+const provider = 'nvidia';
+const model = 'glm';
+
+console.log("Provider:", provider.toLowerCase());
+console.log("Model:", model.toLowerCase());
+
 const openai = new OpenAI({
-    apiKey: process.env.NVIDIA_API_KEY,
-    baseURL: 'https://integrate.api.nvidia.com/v1',
+    apiKey: models[provider].apiKey,
+    baseURL: models[provider].baseURL,
+
 })
 
 const agentPrompt = fs.readFileSync('./config/system.md', 'utf-8');
@@ -23,6 +34,8 @@ async function main() {
     let outmsg = ''
     let inputMsg = '';
     if (isToolCall) {
+        toolResponse = redact(toolResponse.trim());
+        isToolCall = false;
         console.log('Tool response: ', toolResponse);
         if (toolResponse) {
             const confirmation = await askQuestion("Press Enter to send Tool Response to Agent...");
@@ -32,9 +45,8 @@ async function main() {
                 return;
             }
         }
-        inputMsg = toolResponse;
+        inputMsg = toolResponse + '\n' + confirmation;
         toolResponse = '';
-        isToolCall = false;
     }
     else {
         inputMsg = await askQuestion("Input:");
@@ -45,12 +57,10 @@ async function main() {
     }
     try {
         const completion = await openai.chat.completions.create({
-            model: "minimaxai/minimax-m2.7",
+            ...models[provider][model],
             messages: msgArray,
-            temperature: 1,
-            top_p: 0.95,
-            max_tokens: 8192,
-            stream: true
+            stream: true,
+
         })
 
         let isfirstChunk = true;
@@ -72,10 +82,30 @@ async function main() {
         console.error("Error during OpenAI API call: ", error);
         return;
     }
-    if (outmsg.includes("TOOL_CALL:")) {
+    msgArray.push({ "role": "assistant", "content": outmsg })
+    if (outmsg.includes("```json")) {
+        const regex = /```json\s*({"tool":[\s\S]*?)\s*```/
+        const toolJson = outmsg.match(regex)?.[1]
+        let parsed;
+        if (!toolJson) {
+            console.log("No tool call JSON found in the output.");
+            return;
+        }
         isToolCall = true;
-        const toolJson = outmsg.split("TOOL_CALL:")[1].trim();
-        const confirmation = await askQuestion(`Tool call detected: ${toolJson}. Do you want to execute this command? (N/n for no) `);
+        try {
+            parsed = JSON.parse(toolJson);
+        } catch (error) {
+            console.log(`Invalid JSON in tool call: ${error.message}`);
+            toolResponse = `Error parsing tool call JSON: ${error.message}`;
+            return;
+        }
+        if (!parsed.tool || !parsed.input) {
+            console.log('Invalid tool call: missing tool or input property');
+            toolResponse = 'Invalid tool call: missing tool or input property';
+            return;
+        }
+
+        const confirmation = await askQuestion(`Tool call detected (y/n): ${JSON.stringify(parsed)}`);
         if (confirmation.toLowerCase() === 'n') {
             toolResponse = "\nTool call cancelled by user.";
             console.log("\nTool call cancelled by user.");
@@ -88,8 +118,6 @@ async function main() {
             }
         }
     }
-    msgArray.push({ "role": "assistant", "content": outmsg })
-    outmsg = '';
 }
 
 while (true) {
