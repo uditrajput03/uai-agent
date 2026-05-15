@@ -3,7 +3,6 @@ import 'dotenv/config';
 import fs from 'fs';
 import { askQuestion } from './tools/askQuestion.js';
 import { toolCall } from './tools/toolCall.js';
-import { log } from 'console';
 const openai = new OpenAI({
     apiKey: process.env.NVIDIA_API_KEY,
     baseURL: 'https://integrate.api.nvidia.com/v1',
@@ -25,14 +24,15 @@ async function main() {
     let inputMsg = '';
     if (isToolCall) {
         console.log('Tool response: ', toolResponse);
-        const confirmation = await askQuestion("Press Enter to send Tool Response to Agent...");
-        if (confirmation.toLowerCase() === 'n') {
-            console.log("Tool response not sent to agent.");
-            return;
+        if (toolResponse) {
+            const confirmation = await askQuestion("Press Enter to send Tool Response to Agent...");
+            if (confirmation.toLowerCase() === 'n') {
+                toolResponse = "\nTool response not sent to agent.";
+                console.log("Tool response not sent to agent.");
+                return;
+            }
         }
-        else {
-            inputMsg = toolResponse;
-        }
+        inputMsg = toolResponse;
         toolResponse = '';
         isToolCall = false;
     }
@@ -43,19 +43,24 @@ async function main() {
     if (process.env.DEBUG === 'true') {
         console.log("Message Array: ", msgArray);
     }
-    const completion = await openai.chat.completions.create({
-        model: "minimaxai/minimax-m2.7",
-        messages: msgArray,
-        temperature: 1,
-        top_p: 0.95,
-        max_tokens: 8192,
-        stream: true
-    })
+    try {
+        const completion = await openai.chat.completions.create({
+            model: "minimaxai/minimax-m2.7",
+            messages: msgArray,
+            temperature: 1,
+            top_p: 0.95,
+            max_tokens: 8192,
+            stream: true
+        })
 
-    for await (const chunk of completion) {
-        let content = chunk.choices[0]?.delta?.content || ''
-        outmsg += content
-        process.stdout.write(content)
+        for await (const chunk of completion) {
+            let content = chunk.choices[0]?.delta?.content || ''
+            outmsg += content
+            process.stdout.write(content)
+        }
+    } catch (error) {
+        console.error("Error during OpenAI API call: ", error);
+        return;
     }
     if (outmsg.includes("TOOL_CALL:")) {
         isToolCall = true;
@@ -72,11 +77,9 @@ async function main() {
                 toolResponse = `\nError executing tool call: ${error.message}`;
             }
         }
-        msgArray.push({ "role": "assistant", "content": outmsg })
-        outmsg = '';
-        // console.log("Completion: ", outmsg);
-
     }
+    msgArray.push({ "role": "assistant", "content": outmsg })
+    outmsg = '';
 }
 
 while (true) {

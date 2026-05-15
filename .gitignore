@@ -35,3 +35,9 @@ coverage/
 tmp/
 temp/
 *.tmp
+
+# Test files
+test.js
+*.test.js
+test/
+tests/

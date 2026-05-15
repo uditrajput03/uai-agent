@@ -28,7 +28,7 @@ export async function toolCall(toolJson) {
         const { bash } = await import('./bash.js');
         try {
             const result = await bash(input);
-            return result.stdout || result.stderr || 'Command executed with no output';
+            return result.stdout || result.stderr;
         } catch (error) {
             return `Error executing bash command: ${error.message}`;
         }
