@@ -84,7 +84,7 @@ async function main() {
     }
     msgArray.push({ "role": "assistant", "content": outmsg })
     if (outmsg.includes("```json")) {
-        const regex = /```json\s*({"tool":[\s\S]*?)\s*```/
+        const regex = /```json\s*([\s\S]*?)\s*\n```/
         const toolJson = outmsg.match(regex)?.[1]
         let parsed;
         if (!toolJson) {
