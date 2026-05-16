@@ -21,6 +21,18 @@ export async function toolCall(parsed) {
         } catch (error) {
             return `Error executing bash command: ${error.message}`;
         }
+    } else if (tool === 'read') {
+        const { readFile } = await import('./fsOps.js');
+        if (!input?.filePath) {
+            return 'Error: filePath is required for read tool';
+        }
+        return readFile(input?.filePath);
+    } else if (tool === 'write') {
+        const { writeFile } = await import('./fsOps.js');
+        if (!input?.filePath || !input?.content) {
+            return 'Error: filePath and content are required for write tool';
+        }
+        return writeFile(input?.filePath, input?.content);
     }
 
     log(`Unknown tool requested: ${tool}`);
