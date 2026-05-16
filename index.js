@@ -9,8 +9,10 @@ import chalk from 'chalk';
 
 // const provider = 'cloudflare';
 // const model = 'kimi';
-const provider = 'nvidia';
-const model = 'glm';
+// const provider = 'nvidia';
+const provider = 'alibaba';
+// const model = 'minimax';
+const model = 'qwen';
 
 console.log(chalk.cyan("Provider:"), chalk.bold(provider.toLowerCase()));
 console.log(chalk.cyan("Model:"), chalk.bold(model.toLowerCase()));

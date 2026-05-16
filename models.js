@@ -31,5 +31,13 @@ export const models = {
             }
         }
 
+    },
+    alibaba: {
+        apiKey: process.env.ALIBABA_API_KEY,
+        baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+        qwen: {
+            model: "qwen3.6-max-preview",
+            extra_body: { "enable_thinking": true }
+        }
     }
 };
