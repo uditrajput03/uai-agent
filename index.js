@@ -5,14 +5,15 @@ import { askQuestion } from './tools/askQuestion.js';
 import { toolCall } from './tools/toolCall.js';
 import { models } from './models.js';
 import { redact } from './tools/redact.js';
+import chalk from 'chalk';
 
 // const provider = 'cloudflare';
 // const model = 'kimi';
 const provider = 'nvidia';
 const model = 'glm';
 
-console.log("Provider:", provider.toLowerCase());
-console.log("Model:", model.toLowerCase());
+console.log(chalk.cyan("Provider:"), chalk.bold(provider.toLowerCase()));
+console.log(chalk.cyan("Model:"), chalk.bold(model.toLowerCase()));
 
 const openai = new OpenAI({
     apiKey: models[provider].apiKey,
@@ -37,13 +38,13 @@ async function main() {
     if (isToolCall) {
         toolResponse = redact(toolResponse.trim());
         isToolCall = false;
-        console.log('Tool response: ', toolResponse);
+        console.log(chalk.blue('Tool response: '), toolResponse);
         let confirmation
         if (toolResponse) {
-            confirmation = await askQuestion("Enter to send (y/n):");
+            confirmation = await askQuestion(chalk.yellow("Enter to send (y/n): "));
             if (confirmation.toLowerCase() === 'n') {
                 toolResponse = "\nTool response not sent to agent.";
-                console.log("Tool response not sent to agent.");
+                console.log(chalk.red("Tool response not sent to agent."));
                 return;
             }
         }
@@ -52,7 +53,7 @@ async function main() {
         toolResponse = '';
     }
     else {
-        inputMsg = await askQuestion("Input:");
+        inputMsg = await askQuestion(chalk.green("Input: "));
     }
     msgArray.push({ "role": "user", "content": inputMsg })
     if (process.env.DEBUG === 'true') {
@@ -71,7 +72,7 @@ async function main() {
             let content = chunk.choices[0]?.delta?.content || ''
             let reasoning = chunk.choices[0]?.delta?.reasoning_content
             if (reasoning) {
-                process.stdout.write(`.`)
+                process.stdout.write(chalk.dim(`.`))
                 continue;
             }
             if (isfirstChunk && content.trim()) {
@@ -82,7 +83,7 @@ async function main() {
             process.stdout.write(content)
         }
     } catch (error) {
-        console.error("Error during OpenAI API call: ", error);
+        console.error(chalk.red("Error during OpenAI API call: ", error));
         return;
     }
     msgArray.push({ "role": "assistant", "content": outmsg })
@@ -103,21 +104,22 @@ async function main() {
             return;
         }
         if (!parsed.tool || !parsed.input) {
-            console.log('Invalid tool call: missing tool or input property');
+            console.log(chalk.red('Invalid tool call: missing tool or input property'));
             toolResponse = 'Invalid tool call: missing tool or input property';
             return;
         }
 
-        const confirmation = await askQuestion(`Tool call detected (y/n): ${JSON.stringify(parsed)}`);
+        const confirmation = await askQuestion(chalk.bgYellow.black(` Tool call detected `) + chalk.yellow(` (y/n): ${JSON.stringify(parsed)} `));
         if (confirmation.toLowerCase() === 'n') {
             toolResponse = "\nTool call cancelled by user.";
-            console.log("\nTool call cancelled by user.");
+            console.log(chalk.red("\nTool call cancelled by user."));
         } else {
             try {
                 const response = await toolCall(parsed);
                 toolResponse = `\nTool call ${parsed.tool} result: ${response}`;
             } catch (error) {
                 toolResponse = `\nError executing tool call: ${error.message}`;
+                console.error(chalk.red(toolResponse));
             }
         }
     }
