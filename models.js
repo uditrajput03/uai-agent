@@ -2,8 +2,8 @@ import 'dotenv/config';
 
 export const models = {
     cloudflare: {
-        apiKey: process.env.WORKER_AI,
-        baseURL: `https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/ai/v1`,
+        apiKey: process.env.WORKER_AI.split(':')[1],
+        baseURL: `https://api.cloudflare.com/client/v4/accounts/${process.env.WORKER_AI.split(':')[0]}/ai/v1`,
         kimi: {
             model: "@cf/moonshotai/kimi-k2.6",
         }

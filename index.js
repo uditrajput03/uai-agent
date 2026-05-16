@@ -7,6 +7,7 @@ import { models } from './models.js';
 import { redact } from './tools/redact.js';
 
 // const provider = 'cloudflare';
+// const model = 'kimi';
 const provider = 'nvidia';
 const model = 'glm';
 
@@ -37,8 +38,9 @@ async function main() {
         toolResponse = redact(toolResponse.trim());
         isToolCall = false;
         console.log('Tool response: ', toolResponse);
+        let confirmation
         if (toolResponse) {
-            const confirmation = await askQuestion("Enter to send (y/n):");
+            confirmation = await askQuestion("Enter to send (y/n):");
             if (confirmation.toLowerCase() === 'n') {
                 toolResponse = "\nTool response not sent to agent.";
                 console.log("Tool response not sent to agent.");
@@ -46,6 +48,7 @@ async function main() {
             }
         }
         inputMsg = toolResponse + '\n' + confirmation;
+        // else inputMsg = toolResponse;
         toolResponse = '';
     }
     else {
@@ -84,7 +87,7 @@ async function main() {
     }
     msgArray.push({ "role": "assistant", "content": outmsg })
     if (outmsg.includes("```json")) {
-        const regex = /```json\s*([\s\S]*?)\s*\n```/
+        const regex = /```json\s*(\{[\s\S]*?\})\s*```/
         const toolJson = outmsg.match(regex)?.[1]
         let parsed;
         if (!toolJson) {
@@ -112,7 +115,7 @@ async function main() {
         } else {
             try {
                 const response = await toolCall(parsed);
-                toolResponse = `\nTool call result: ${response}`;
+                toolResponse = `\nTool call ${parsed.tool} result: ${response}`;
             } catch (error) {
                 toolResponse = `\nError executing tool call: ${error.message}`;
             }
