@@ -1,5 +1,6 @@
 import { exec } from 'child_process';
 import { redact } from './redact.js';
+import chalk from 'chalk';
 
 // ============================================
 // SENSITIVE COMMANDS PROTECTION
@@ -84,11 +85,6 @@ function isDestructive(command) {
     return false;
 }
 
-// Log security events
-function logSecurity(command, status) {
-    console.error(`[SECURITY] ${status}: ${command}`);
-}
-
 // Sanitize input - remove dangerous characters
 function sanitizeInput(input) {
     return input //TODO
@@ -101,20 +97,18 @@ export function bash(command, options = {}) {
     // Check for blocked commands
     const blockCheck = isCommandBlocked(sanitizedCommand);
     if (blockCheck.blocked) {
-        logSecurity(sanitizedCommand, 'BLOCKED');
+        console.error(chalk.red(`\n🔒 Security: Command blocked - contains dangerous pattern '${blockCheck.pattern}'`));
         return Promise.reject(
             new Error(`Command blocked: contains dangerous pattern '${blockCheck.pattern}'`)
         );
     }
 
-    // Check for destructive commands
+    // Check for destructive commands and warn
     if (isDestructive(sanitizedCommand)) {
-        logSecurity(sanitizedCommand, 'WARNING - DESTRUCTIVE COMMAND');
+        console.warn(chalk.yellow(`\n⚠️  Warning: Potentially destructive command detected`));
     }
 
-    // Log all command executions
-    logSecurity(sanitizedCommand, 'EXECUTED');
-
+    // Execute the command
     return new Promise((resolve, reject) => {
         exec(sanitizedCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
             if (error) {
