@@ -4,7 +4,7 @@ import 'dotenv/config';
 import fs from 'fs';
 import { askQuestion, closeReadline, pauseReadline, resumeReadline } from './utils/askQuestion.js';
 import { toolCall } from './tools/toolCall.js';
-import { models } from './models.js';
+import { models } from './config.js';
 import chalk from 'chalk';
 import { keys } from './config/keys.js';
 
@@ -15,6 +15,7 @@ import { tools } from './config/tools.js';
 
 import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from './utils/prints.js';
 import { changeModel, handleCommand } from './utils/commands.js';
+import { getApprovalRequirements } from './utils/approval.js';
 // ============================================
 // CONFIGURATION
 // ============================================
@@ -203,9 +204,11 @@ async function main() {
     // Check for tool calls
     if (finalToolCalls && finalToolCalls.length > 0) {
         printToolCallInfo(finalToolCalls);
-
-        const confirmation = await askQuestion(chalk.yellow('Execute this tool call? (y/N): '));
-
+        const { execApproval } = getApprovalRequirements(finalToolCalls);
+        let confirmation;
+        if (execApproval) {
+            confirmation = await askQuestion(chalk.yellow('Execute this tool call? (y/N): '));
+        }
         if (confirmation && confirmation.toLowerCase().startsWith('n')) {
             toolResponse = "\nTool call cancelled by user.";
             console.log(chalk.red('✗ Tool call cancelled.'));
@@ -222,8 +225,11 @@ async function main() {
     }
     if (toolResponse) {
         printToolResponse(toolResponse);
-
-        let confirmation = await askQuestion(chalk.yellow('Send this response to the agent? (Y/n): '));
+        const { sendingApproval } = getApprovalRequirements(finalToolCalls);
+        let confirmation;
+        if (sendingApproval) {
+            confirmation = await askQuestion(chalk.yellow('Send this response to the agent? (Y/n): '));
+        }
         if (confirmation && confirmation.toLowerCase().startsWith('n')) {
             toolResponse = "\nTool response not sent to agent (cancelled by user)." + confirmation;
             console.log(chalk.red('✗ Tool response not sent.'));

@@ -66,8 +66,6 @@ export function redact(text, options = {}) {
     }
 
     if (redactCustom) {
-        console.log("Custom Patterns", customPatterns);
-
         for (const pattern of customPatterns) {
             redactedText = redactedText.replace(pattern, '[REDACTED]');
         }

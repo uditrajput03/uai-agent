@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs';
 import { askQuestion, closeReadline } from './askQuestion.js';
-import { models } from '../models.js';
+import { models } from '../config.js';
 
 export function clearConversation(msgArray) {
     msgArray.length = 1;
