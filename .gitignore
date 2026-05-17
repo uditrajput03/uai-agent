@@ -41,3 +41,4 @@ test.js
 *.test.js
 test/
 tests/
+config/keys.js

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import OpenAI from 'openai';
 import 'dotenv/config';
 import fs from 'fs';
@@ -6,6 +7,10 @@ import { toolCall } from './tools/toolCall.js';
 import { models } from './models.js';
 import { redact } from './tools/redact.js';
 import chalk from 'chalk';
+import { keys } from './config/keys.js';
+
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // ============================================
 // CONFIGURATION
@@ -20,9 +25,14 @@ const openai = new OpenAI({
     apiKey: models[provider].apiKey,
     baseURL: models[provider].baseURL,
 });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const agentPrompt = fs.readFileSync('./config/system.md', 'utf-8');
-const toolsPrompt = fs.readFileSync('./config/tools.md', 'utf-8');
+const systemPath = path.resolve(__dirname, 'config/SYSTEM.md');
+const toolsPath = path.resolve(__dirname, 'config/TOOLS.md');
+
+const agentPrompt = fs.readFileSync(systemPath, 'utf-8');
+const toolsPrompt = fs.readFileSync(toolsPath, 'utf-8');
 const systemPrompt = agentPrompt + "\n\n" + toolsPrompt;
 
 const msgArray = [
@@ -38,17 +48,16 @@ let toolResponse = '';
 
 function printWelcome() {
     console.log('\n' + chalk.bold.cyan('╔═══════════════════════════════════════════════════╗'));
-    console.log(chalk.bold.cyan('║') + '           ' + chalk.bold.white('🤖 UAI Agent - AI Assistant') + '            ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '           ' + chalk.bold.white('🤖 UAI Agent - AI Assistant') + '             ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
-    console.log(chalk.bold.cyan('║') + '  ' + chalk.dim('Provider:') + ' ' + chalk.bold(provider.toLowerCase()) + '  |  ' + chalk.dim('Model:') + ' ' + chalk.bold(model.toLowerCase()) + '       ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '  ' + chalk.dim('Provider:') + ' ' + chalk.bold(provider.toLowerCase()) + '  |  ' + chalk.dim('Model:') + ' ' + chalk.bold(model.toLowerCase()) + '                ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
-    console.log(chalk.bold.cyan('║') + '  ' + chalk.yellow('Commands:') + '                                      ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('help') + '    - Show this help message              ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('clear') + '   - Clear conversation history          ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('exit') + '    - Exit the agent                      ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('quit') + '    - Exit the agent                      ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '  ' + chalk.yellow('Commands:') + '                                        ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('help') + '    - Show this help message               ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('clear') + '   - Clear conversation history           ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('exit') + '    - Exit the agent                       ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
-    console.log(chalk.bold.cyan('║') + '  ' + chalk.dim('Press Ctrl+C at any time to exit') + '               ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '  ' + chalk.dim('Press Ctrl+C at any time to exit') + '                 ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('╚═══════════════════════════════════════════════════╝'));
     console.log('');
 }
@@ -62,7 +71,6 @@ function showHelp() {
     console.log('  ' + chalk.green('help') + '    - Show this help message');
     console.log('  ' + chalk.green('clear') + '   - Clear conversation history (keeps system prompt)');
     console.log('  ' + chalk.green('exit') + '    - Exit the agent');
-    console.log('  ' + chalk.green('quit') + '    - Exit the agent');
     console.log('');
     console.log(chalk.bold.yellow('Usage:'));
     console.log('  Type your message and press Enter to send.');
@@ -153,7 +161,7 @@ async function main() {
     const trimmedInput = inputMsg.trim().toLowerCase();
 
     // Handle special commands
-    if (trimmedInput === 'exit' || trimmedInput === 'quit') {
+    if (trimmedInput === 'exit') {
         exitAgent();
         return;
     }
@@ -176,7 +184,7 @@ async function main() {
     // Add user message to conversation
     msgArray.push({ "role": "user", "content": inputMsg });
 
-    if (process.env.DEBUG === 'true') {
+    if (keys.DEBUG === 'true') {
         console.log(chalk.dim('Message Array:'), msgArray);
     }
 

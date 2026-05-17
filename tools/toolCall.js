@@ -1,4 +1,5 @@
 import { log } from 'node:console';
+import { keys } from '../config/keys.js';
 
 export async function toolCall(parsed) {
     if (!parsed || typeof parsed !== 'object') {
@@ -8,7 +9,7 @@ export async function toolCall(parsed) {
     const tool = parsed.tool.trim();
     const input = parsed.input;
 
-    if (process.env.DEBUG === 'true') {
+    if (keys.DEBUG === 'true') {
         console.log('Tool Call - tool:', tool);
         console.log('Tool Call - Input:', input);
     }
