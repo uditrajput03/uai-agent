@@ -39,7 +39,8 @@ export function rewindConversation(msgArray) {
 }
 
 export async function exportConversation(msgArray, provider, model, __dirname) {
-    const chatMessages = msgArray.filter(msg => msg.role === 'user' || msg.role === 'assistant');
+    // Include user, assistant, and tool messages
+    const chatMessages = msgArray.filter(msg => msg.role === 'user' || msg.role === 'assistant' || msg.role === 'tool');
 
     if (chatMessages.length === 0) {
         console.log(chalk.yellow('⚠ No conversation to export.'));
@@ -56,7 +57,22 @@ export async function exportConversation(msgArray, provider, model, __dirname) {
         if (msg.role === 'user') {
             markdown += `## 👤 User\n\n${msg.content}\n\n`;
         } else if (msg.role === 'assistant') {
-            markdown += `## 🤖 Assistant\n\n${msg.content}\n\n`;
+            markdown += `## 🤖 Assistant\n\n`;
+            if (msg.content) {
+                markdown += `${msg.content}\n\n`;
+            }
+            if (msg.tool_calls && msg.tool_calls.length > 0) {
+                markdown += `**⚡ Tool Calls:**\n\n`;
+                for (const toolCall of msg.tool_calls) {
+                    markdown += `- **Tool:** \`${toolCall.function.name}\`\n`;
+                    markdown += `  **Arguments:** \`\`\`json\n${toolCall.function.arguments}\n\`\`\`\n`;
+                }
+                markdown += `\n`;
+            }
+        } else if (msg.role === 'tool') {
+            markdown += `## 🔧 Tool Response\n\n`;
+            markdown += `**Tool Call ID:** \`${msg.tool_call_id}\`\n\n`;
+            markdown += `\`\`\`\n${msg.content}\n\`\`\`\n\n`;
         }
         markdown += `---\n\n`;
     }
@@ -109,6 +125,7 @@ const commands = {
     help: { fn: showHelp, description: 'Show help message' },
     clear: { fn: clearConversation, description: 'Clear conversation history' },
     rewind: { fn: rewindConversation, description: 'Undo last message and response' },
+    export: { fn: exportConversation, description: 'Export chat history to markdown' },
     exit: { fn: exitAgent, description: 'Exit the agent' },
 };
 
@@ -121,7 +138,7 @@ export async function handleCommand(trimmedInput, context) {
     const { msgArray, provider, model, __dirname } = context;
 
     if (trimmedInput === 'export') {
-        await exportConversation(msgArray, provider, model, __dirname);
+        await command.fn(msgArray, provider, model, __dirname);
     } else if (['clear', 'rewind'].includes(trimmedInput)) {
         command.fn(msgArray);
     } else {

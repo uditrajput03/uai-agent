@@ -155,11 +155,18 @@ async function main() {
                     const { index } = toolCall;
 
                     if (!finalToolCalls[index]) {
-                        finalToolCalls[index] = toolCall;
-                        delete finalToolCalls[index].index;
+                        finalToolCalls[index] = {
+                            id: toolCall.id,
+                            type: toolCall.type,
+                            function: {
+                                name: toolCall.function?.name || '',
+                                arguments: toolCall.function?.arguments || ''
+                            }
+                        };
+                    } else {
+                        if (toolCall.function?.name) finalToolCalls[index].function.name += toolCall.function.name;
+                        if (toolCall.function?.arguments) finalToolCalls[index].function.arguments += toolCall.function.arguments;
                     }
-
-                    finalToolCalls[index].function.arguments += toolCall.function.arguments;
                 });
             }
 
