@@ -41,137 +41,12 @@ const msgArray = [
 ];
 
 let isToolCall = false;
+
 // ============================================
-// UTILITY FUNCTIONS
+// IMPORTS: PRINTS & COMMANDS
 // ============================================
-
-function printWelcome() {
-    console.log('\n' + chalk.bold.cyan('╔═══════════════════════════════════════════════════╗'));
-    console.log(chalk.bold.cyan('║') + '           ' + chalk.bold.white('🤖 UAI Agent - AI Assistant') + '             ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
-    console.log(chalk.bold.cyan('║') + '  ' + chalk.dim('Provider:') + ' ' + chalk.bold(provider.toLowerCase()) + '  |  ' + chalk.dim('Model:') + ' ' + chalk.bold(model.toLowerCase()) + '                ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
-    console.log(chalk.bold.cyan('║') + '  ' + chalk.yellow('Commands:') + '                                        ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('help') + '    - Show this help message               ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('clear') + '   - Clear conversation history           ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('rewind') + '  - Undo last message and response       ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('export') + '  - Export chat history to markdown      ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('exit') + '    - Exit the agent                       ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
-    console.log(chalk.bold.cyan('║') + '  ' + chalk.dim('Press Ctrl+C at any time to exit') + '                 ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('╚═══════════════════════════════════════════════════╝'));
-    console.log('');
-}
-
-function printSeparator() {
-    console.log(chalk.dim('─'.repeat(60)));
-}
-
-function showHelp() {
-    console.log('\n' + chalk.bold.yellow('Help & Commands:'));
-    console.log('  ' + chalk.green('help') + '    - Show this help message');
-    console.log('  ' + chalk.green('clear') + '   - Clear conversation history (keeps system prompt)');
-    console.log('  ' + chalk.green('rewind') + '  - Undo the last message and assistant response');
-    console.log('  ' + chalk.green('export') + '  - Export chat history to a markdown file');
-    console.log('  ' + chalk.green('exit') + '    - Exit the agent');
-    console.log('');
-    console.log(chalk.bold.yellow('Usage:'));
-    console.log('  Type your message and press Enter to send.');
-    console.log('  The agent can execute tools (bash, read, write) with your confirmation.');
-    console.log('');
-    console.log(chalk.bold.yellow('Keyboard Shortcuts:'));
-    console.log('  ' + chalk.dim('Ctrl+C') + '  - Exit the agent');
-    console.log('  ' + chalk.dim('Up/Down') + ' - Navigate command history');
-    console.log('');
-}
-
-function clearConversation() {
-    // Keep only the system prompt
-    msgArray.length = 1;
-    console.log(chalk.green('✓ Conversation history cleared.'));
-    console.log('');
-}
-
-function rewindConversation() {
-    // Find and remove the last user message and assistant response
-    // We need to remove the last user+assistant pair (skip any system messages)
-    let removedCount = 0;
-    let foundAssistant = false;
-    let foundUser = false;
-
-    // Remove from the end: first assistant, then user
-    let initialLength = msgArray.length;
-    for (let i = initialLength - 1; i > 0; i--) {
-        if (!foundAssistant && msgArray[i].role === 'assistant') {
-            msgArray.splice(i, 1);
-            foundAssistant = true;
-            removedCount++;
-        } else if (foundAssistant && !foundUser && msgArray[i].role === 'user') {
-            msgArray.splice(i, 1);
-            foundUser = true;
-            removedCount++;
-            break;
-        }
-    }
-
-    if (foundUser && foundAssistant) {
-        console.log(chalk.green(`✓ Rewound ${initialLength - msgArray.length} message(s).`));
-    } else if (removedCount > 0) {
-        console.log(chalk.green('✓ Removed last message(s).'));
-    } else {
-        console.log(chalk.yellow('⚠ Nothing to rewind.'));
-    }
-    console.log('');
-}
-
-async function exportConversation() {
-    // Filter out system messages, keep only user and assistant
-    const chatMessages = msgArray.filter(msg => msg.role === 'user' || msg.role === 'assistant');
-
-    if (chatMessages.length === 0) {
-        console.log(chalk.yellow('⚠ No conversation to export.'));
-        console.log('');
-        return;
-    }
-
-    // Build markdown content
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    let markdown = `# Chat Export - ${new Date().toLocaleString()}\n\n`;
-    markdown += `**Provider:** ${provider} | **Model:** ${model}\n\n`;
-    markdown += `---\n\n`;
-
-    for (const msg of chatMessages) {
-        if (msg.role === 'user') {
-            markdown += `## 👤 User\n\n${msg.content}\n\n`;
-        } else if (msg.role === 'assistant') {
-            markdown += `## 🤖 Assistant\n\n${msg.content}\n\n`;
-        }
-        markdown += `---\n\n`;
-    }
-
-    // Ask for filename
-    const defaultFilename = `chat-export-${timestamp}.md`;
-    const filenameInput = await askQuestion(chalk.yellow(`Enter filename (default: ${defaultFilename}): `));
-    const filename = filenameInput?.trim() || defaultFilename;
-
-    // Ensure .md extension
-    const finalFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
-
-    try {
-        const exportPath = path.resolve(__dirname, finalFilename);
-        fs.writeFileSync(exportPath, markdown, 'utf-8');
-        console.log(chalk.green(`✓ Chat history exported to: ${finalFilename}`));
-    } catch (error) {
-        console.error(chalk.red('✗ Error exporting chat history:'), error.message);
-    }
-    console.log('');
-}
-
-function exitAgent() {
-    console.log('\n' + chalk.cyan('👋 Goodbye!') + '\n');
-    closeReadline();
-    process.exit(0);
-}
+import { printWelcome, printSeparator, showHelp, printToolCallInfo, printToolResponse } from './tools/prints.js';
+import { clearConversation, rewindConversation, exportConversation, exitAgent } from './tools/commands.js';
 
 // ============================================
 // SIGNAL HANDLERS
@@ -228,17 +103,17 @@ async function main() {
     }
 
     if (trimmedInput === 'clear') {
-        clearConversation();
+        clearConversation(msgArray);
         return;
     }
 
     if (trimmedInput === 'rewind') {
-        rewindConversation();
+        rewindConversation(msgArray);
         return;
     }
 
     if (trimmedInput === 'export') {
-        await exportConversation();
+        await exportConversation(msgArray, provider, model, __dirname);
         return;
     }
 
@@ -330,7 +205,6 @@ async function main() {
         if (keys.DEBUG === 'true') {
             console.log(JSON.stringify(finalToolCalls, null, 2));
         }
-        outmsg = finalToolCalls
         msgArray.push({ "role": "assistant", "content": null, tool_calls: finalToolCalls });
     }
     else {
@@ -341,18 +215,7 @@ async function main() {
     // Check for tool calls
     if (finalToolCalls && finalToolCalls.length > 0) {
         isToolCall = true;
-        console.log('\n' + chalk.bgYellow.black(' ⚡ Tool Call Detected '));
-        finalToolCalls.forEach((toolCall, index) => {
-            console.log(chalk.yellow(`Tool Call #${index + 1}:`));
-            console.log(chalk.yellow('  Tool: ') + chalk.bold(toolCall.function.name));
-            let parsedArgs = toolCall.function.arguments;
-            try {
-                parsedArgs = JSON.parse(toolCall.function.arguments);
-            } catch (e) {
-                // Ignore incomplete parse for display
-            }
-            console.log(chalk.yellow('  Input: ') + chalk.dim(JSON.stringify(parsedArgs, null, 2)));
-        });
+        printToolCallInfo(finalToolCalls);
 
         const confirmation = await askQuestion(chalk.yellow('Execute this tool call? (y/N): '));
 
@@ -371,10 +234,7 @@ async function main() {
         }
     }
     if (toolResponse) {
-        console.log('\n' + chalk.blue('📋 Tool Response:'));
-        console.log(chalk.dim('─'.repeat(60)));
-        console.log(toolResponse);
-        console.log(chalk.dim('─'.repeat(60)));
+        printToolResponse(toolResponse);
 
         let confirmation = await askQuestion(chalk.yellow('Send this response to the agent? (Y/n): '));
         if (confirmation && confirmation.toLowerCase().startsWith('n')) {
@@ -396,7 +256,7 @@ async function main() {
 // START
 // ============================================
 
-printWelcome();
+printWelcome(provider, model);
 
 (async () => {
     while (true) {
