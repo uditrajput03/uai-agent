@@ -1,4 +1,3 @@
-import { log } from 'node:console';
 import { keys } from '../config/keys.js';
 import { readFile, writeFile } from './fsOps.js';
 import { bash } from './bash.js';

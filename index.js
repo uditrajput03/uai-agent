@@ -13,19 +13,22 @@ import { fileURLToPath } from 'url';
 import { addUserContext } from './utils/userAppend.js';
 import { tools } from './config/tools.js';
 
+import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from './utils/prints.js';
+import { changeModel, handleCommand } from './utils/commands.js';
 // ============================================
 // CONFIGURATION
 // ============================================
-const provider = 'alibaba';
-const model = 'qwen';
+const config = {
+    provider: keys.defaultProvider,
+    model: keys.defaultModel,
+};
 
+if (!config.provider || !config.model) {
+    await changeModel({ config });
+}
 // ============================================
 // SETUP
 // ============================================
-const openai = new OpenAI({
-    apiKey: models[provider].apiKey,
-    baseURL: models[provider].baseURL,
-});
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -39,14 +42,6 @@ const systemPrompt = agentPrompt;
 const msgArray = [
     { "role": "system", "content": systemPrompt }
 ];
-
-let isToolCall = false;
-
-// ============================================
-// IMPORTS: PRINTS & COMMANDS
-// ============================================
-import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from './utils/prints.js';
-import { handleCommand } from './utils/commands.js';
 
 // ============================================
 // SIGNAL HANDLERS
@@ -81,6 +76,13 @@ async function main() {
     let toolResponse = '';
     let finalToolCalls = {};
     let lastMessageWasTool = msgArray.length > 0 && msgArray[msgArray.length - 1].role === 'tool';
+
+    // Initialize OpenAI client dynamically to support provider/model switching
+    const openai = new OpenAI({
+        apiKey: models[config.provider].apiKey,
+        baseURL: models[config.provider].baseURL,
+    });
+
     // Handle tool response from previous iteration
     if (!lastMessageWasTool) inputMsg = await askQuestion(chalk.green.bold('You: '));
 
@@ -92,7 +94,7 @@ async function main() {
     const trimmedInput = inputMsg?.trim()?.toLowerCase();
 
     // Handle special commands via command handler
-    const commandContext = { msgArray, provider, model, __dirname };
+    const commandContext = { msgArray, config, __dirname };
     const isCommand = await handleCommand(trimmedInput, commandContext);
     if (isCommand) return;
 
@@ -117,7 +119,7 @@ async function main() {
         pauseReadline();
 
         const completion = await openai.chat.completions.create({
-            ...models[provider][model],
+            ...models[config.provider][config.model],
             messages: msgArray,
             tools: tools,
             stream: true,
@@ -200,7 +202,6 @@ async function main() {
 
     // Check for tool calls
     if (finalToolCalls && finalToolCalls.length > 0) {
-        isToolCall = true;
         printToolCallInfo(finalToolCalls);
 
         const confirmation = await askQuestion(chalk.yellow('Execute this tool call? (y/N): '));
@@ -242,7 +243,7 @@ async function main() {
 // START
 // ============================================
 
-printWelcome(provider, model);
+printWelcome(config.provider, config.model);
 
 (async () => {
     while (true) {

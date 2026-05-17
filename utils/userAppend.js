@@ -1,5 +1,7 @@
 import chalk from "chalk";
-import { toolCall } from "../tools/toolCall.js";
+import { execSync } from "child_process";
+import { readFile } from "../tools/fsOps.js";
+import { redact } from "./redact.js";
 
 // All the code that is used when the user is appending to the file
 export function parseCommands(string) {
@@ -16,17 +18,18 @@ export async function addUserContext(string) {
     }
     for (const command of commands) {
         if (command === 'workspace') {
-            let toolResult = await toolCall({ tool: 'bash', input: { command: "ls -la" } });
-            context += "Workspace: ls -la \n" + toolResult + "\n";
-            // Add workspace context
+            try {
+                const toolResult = execSync("ls -la", { encoding: 'utf-8', timeout: 10000 });
+                context += "Workspace: ls -la \n" + toolResult + "\n";
+            } catch (error) {
+                context += "Workspace: ls -la \nError: " + error.message + "\n";
+            }
         } else if (command.startsWith('./') || command.startsWith('.\\')) {
-            let toolResult = await toolCall({ tool: 'read', input: { filePath: command } });
+            const toolResult = readFile(command);
             context += "File: " + command + "\n" + toolResult + "\n";
-            // Add file context
         } else {
             chalk.red(`Unknown command: ${command}`);
-            // Handle other commands
         }
     }
-    return context;
+    return redact(context);
 }

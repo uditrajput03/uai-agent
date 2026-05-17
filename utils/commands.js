@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import path from 'path';
 import fs from 'fs';
 import { askQuestion, closeReadline } from './askQuestion.js';
+import { models } from '../models.js';
 
 export function clearConversation(msgArray) {
     msgArray.length = 1;
@@ -105,6 +106,7 @@ export function showHelp() {
     console.log('  ' + chalk.green('clear') + '   - Clear conversation history (keeps system prompt)');
     console.log('  ' + chalk.green('rewind') + '  - Undo the last message and assistant response');
     console.log('  ' + chalk.green('export') + '  - Export chat history to a markdown file');
+    console.log('  ' + chalk.green('model') + '   - Change the current model/provider');
     console.log('  ' + chalk.green('exit') + '    - Exit the agent');
     console.log('');
     console.log(chalk.bold.yellow('Usage:'));
@@ -117,6 +119,91 @@ export function showHelp() {
     console.log('');
 }
 
+export async function changeModel(context) {
+    const { config } = context;
+
+    console.log('\n' + chalk.bold.yellow('Available Models:'));
+
+    // Handle empty or missing provider/model
+    const currentProvider = config.provider || 'none';
+    const currentModel = config.model || 'none';
+    const hasValidConfig = !!(config.provider && config.model);
+
+    if (hasValidConfig) {
+        console.log(chalk.dim(`  Current: ${currentProvider}/${currentModel}`));
+    } else {
+        console.log(chalk.yellow(`  Current: ${currentProvider}/${currentModel} (not set)`));
+    }
+    console.log('');
+
+    // Build a list of all available models grouped by provider
+    const availableModels = [];
+    for (const [providerKey, providerData] of Object.entries(models)) {
+        for (const [modelKey] of Object.entries(providerData)) {
+            if (['apiKey', 'baseURL'].includes(modelKey)) continue;
+            availableModels.push({ provider: providerKey, model: modelKey });
+        }
+    }
+
+    // Display numbered list
+    availableModels.forEach((item, index) => {
+        const isActive = hasValidConfig && item.provider === config.provider && item.model === config.model;
+        const prefix = isActive ? chalk.green('→ ') : '  ';
+        const label = isActive ? chalk.green(`${item.provider}/${item.model} (active)`) : `${item.provider}/${item.model}`;
+        console.log(`${prefix}${chalk.dim(`${index + 1}.`)} ${label}`);
+    });
+
+    console.log('');
+    const selection = await askQuestion(chalk.yellow('Select model (number or provider/model) or press Enter to cancel: '));
+
+    if (!selection?.trim()) {
+        console.log(chalk.dim('Model change cancelled.'));
+        console.log('');
+        return;
+    }
+
+    let newProvider, newModel;
+
+    // Try parsing as number
+    const num = parseInt(selection.trim());
+    if (!isNaN(num) && num >= 1 && num <= availableModels.length) {
+        newProvider = availableModels[num - 1].provider;
+        newModel = availableModels[num - 1].model;
+    } else {
+        // Try parsing as provider/model
+        const parts = selection.trim().split('/');
+        if (parts.length === 2) {
+            newProvider = parts[0].toLowerCase().trim();
+            newModel = parts[1].toLowerCase().trim();
+        } else {
+            console.log(chalk.red('✗ Invalid format. Use number or provider/model (e.g., alibaba/qwen).'));
+            console.log('');
+            return;
+        }
+    }
+
+    // Validate selection
+    if (!models[newProvider]) {
+        console.log(chalk.red(`✗ Provider '${newProvider}' not found.`));
+        console.log('');
+        return;
+    }
+    if (!models[newProvider][newModel]) {
+        console.log(chalk.red(`✗ Model '${newModel}' not found for provider '${newProvider}'.`));
+        console.log('');
+        return;
+    }
+
+    // Update the config
+    config.provider = newProvider;
+    config.model = newModel;
+
+    console.log('');
+    console.log(chalk.green(`✓ Model changed to: ${newProvider}/${newModel}`));
+    console.log(chalk.dim('Tip: Consider using "clear" to start fresh with the new model.'));
+    console.log('');
+}
+
 // ============================================
 // COMMAND HANDLER
 // ============================================
@@ -126,6 +213,7 @@ const commands = {
     clear: { fn: clearConversation, description: 'Clear conversation history' },
     rewind: { fn: rewindConversation, description: 'Undo last message and response' },
     export: { fn: exportConversation, description: 'Export chat history to markdown' },
+    model: { fn: changeModel, description: 'Change the current model/provider' },
     exit: { fn: exitAgent, description: 'Exit the agent' },
 };
 
@@ -135,10 +223,14 @@ export async function handleCommand(trimmedInput, context) {
     }
 
     const command = commands[trimmedInput];
-    const { msgArray, provider, model, __dirname } = context;
+    const { msgArray, config, __dirname } = context;
+    const provider = config.provider || 'none';
+    const model = config.model || 'none';
 
     if (trimmedInput === 'export') {
         await command.fn(msgArray, provider, model, __dirname);
+    } else if (trimmedInput === 'model') {
+        await command.fn(context);
     } else if (['clear', 'rewind'].includes(trimmedInput)) {
         command.fn(msgArray);
     } else {

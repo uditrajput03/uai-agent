@@ -1,5 +1,5 @@
 import { exec } from 'child_process';
-import { redact } from './redact.js';
+import { redact } from '../utils/redact.js';
 import chalk from 'chalk';
 
 // ============================================
