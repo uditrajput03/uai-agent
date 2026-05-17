@@ -345,8 +345,13 @@ async function main() {
         finalToolCalls.forEach((toolCall, index) => {
             console.log(chalk.yellow(`Tool Call #${index + 1}:`));
             console.log(chalk.yellow('  Tool: ') + chalk.bold(toolCall.function.name));
-            toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
-            console.log(chalk.yellow('  Input: ') + chalk.dim(JSON.stringify(toolCall.function.arguments, null, 2)));
+            let parsedArgs = toolCall.function.arguments;
+            try {
+                parsedArgs = JSON.parse(toolCall.function.arguments);
+            } catch (e) {
+                // Ignore incomplete parse for display
+            }
+            console.log(chalk.yellow('  Input: ') + chalk.dim(JSON.stringify(parsedArgs, null, 2)));
         });
 
         const confirmation = await askQuestion(chalk.yellow('Execute this tool call? (y/N): '));
