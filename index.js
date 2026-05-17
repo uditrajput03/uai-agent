@@ -2,7 +2,7 @@
 import OpenAI from 'openai';
 import 'dotenv/config';
 import fs from 'fs';
-import { askQuestion, closeReadline, pauseReadline, resumeReadline } from './tools/askQuestion.js';
+import { askQuestion, closeReadline, pauseReadline, resumeReadline } from './utils/askQuestion.js';
 import { toolCall } from './tools/toolCall.js';
 import { models } from './models.js';
 import chalk from 'chalk';
@@ -10,7 +10,7 @@ import { keys } from './config/keys.js';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { addUserContext } from './tools/userAppend.js';
+import { addUserContext } from './utils/userAppend.js';
 import { tools } from './config/tools.js';
 
 // ============================================
@@ -45,8 +45,8 @@ let isToolCall = false;
 // ============================================
 // IMPORTS: PRINTS & COMMANDS
 // ============================================
-import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from './tools/prints.js';
-import { handleCommand } from './tools/commands.js';
+import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from './utils/prints.js';
+import { handleCommand } from './utils/commands.js';
 
 // ============================================
 // SIGNAL HANDLERS

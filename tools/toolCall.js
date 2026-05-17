@@ -2,7 +2,7 @@ import { log } from 'node:console';
 import { keys } from '../config/keys.js';
 import { readFile, writeFile } from './fsOps.js';
 import { bash } from './bash.js';
-import { redact } from './redact.js';
+import { redact } from '../utils/redact.js';
 
 export async function toolCall(finalToolCalls) {
     if (!finalToolCalls || !Array.isArray(finalToolCalls) || finalToolCalls.length === 0) {

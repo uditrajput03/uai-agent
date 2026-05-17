@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { toolCall } from "./toolCall.js";
+import { toolCall } from "../tools/toolCall.js";
 
 // All the code that is used when the user is appending to the file
 export function parseCommands(string) {
