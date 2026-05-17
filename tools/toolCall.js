@@ -12,7 +12,18 @@ export async function toolCall(finalToolCalls) {
     for (let i = 0; i < finalToolCalls.length; i++) {
         const call = finalToolCalls[i];
         const tool = call.function.name;
-        const input = call.function.arguments //Parse already done in index.js --- IGNORE ---
+        
+        let input = {};
+        try {
+            if (call.function.arguments) {
+                input = JSON.parse(call.function.arguments);
+            }
+        } catch (e) {
+            console.error(`Error parsing args for tool ${tool}:`, e.message);
+            results.push({ role: "tool", tool_call_id: call.id, content: "Error: Invalid JSON arguments returned by model." });
+            continue;
+        }
+
         let output = '';
         if (keys.DEBUG === 'true') {
             console.log('Tool Call - tool:', tool);
