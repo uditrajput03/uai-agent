@@ -45,8 +45,8 @@ let isToolCall = false;
 // ============================================
 // IMPORTS: PRINTS & COMMANDS
 // ============================================
-import { printWelcome, printSeparator, showHelp, printToolCallInfo, printToolResponse } from './tools/prints.js';
-import { clearConversation, rewindConversation, exportConversation, exitAgent } from './tools/commands.js';
+import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from './tools/prints.js';
+import { handleCommand } from './tools/commands.js';
 
 // ============================================
 // SIGNAL HANDLERS
@@ -91,31 +91,10 @@ async function main() {
 
     const trimmedInput = inputMsg?.trim()?.toLowerCase();
 
-    // Handle special commands
-    if (trimmedInput === 'exit') {
-        exitAgent();
-        return;
-    }
-
-    if (trimmedInput === 'help') {
-        showHelp();
-        return;
-    }
-
-    if (trimmedInput === 'clear') {
-        clearConversation(msgArray);
-        return;
-    }
-
-    if (trimmedInput === 'rewind') {
-        rewindConversation(msgArray);
-        return;
-    }
-
-    if (trimmedInput === 'export') {
-        await exportConversation(msgArray, provider, model, __dirname);
-        return;
-    }
+    // Handle special commands via command handler
+    const commandContext = { msgArray, provider, model, __dirname };
+    const isCommand = await handleCommand(trimmedInput, commandContext);
+    if (isCommand) return;
 
     // Skip empty input
     if (!inputMsg.trim() && !lastMessageWasTool) {

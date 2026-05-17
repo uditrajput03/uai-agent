@@ -4,14 +4,12 @@ import fs from 'fs';
 import { askQuestion, closeReadline } from './askQuestion.js';
 
 export function clearConversation(msgArray) {
-    // Keep only the system prompt
     msgArray.length = 1;
     console.log(chalk.green('✓ Conversation history cleared.'));
     console.log('');
 }
 
 export function rewindConversation(msgArray) {
-    // Find and remove the last user message and assistant response
     let removedCount = 0;
     let foundAssistant = false;
     let foundUser = false;
@@ -83,4 +81,52 @@ export function exitAgent() {
     console.log('\n' + chalk.cyan('👋 Goodbye!') + '\n');
     closeReadline();
     process.exit(0);
+}
+
+export function showHelp() {
+    console.log('\n' + chalk.bold.yellow('Help & Commands:'));
+    console.log('  ' + chalk.green('help') + '    - Show this help message');
+    console.log('  ' + chalk.green('clear') + '   - Clear conversation history (keeps system prompt)');
+    console.log('  ' + chalk.green('rewind') + '  - Undo the last message and assistant response');
+    console.log('  ' + chalk.green('export') + '  - Export chat history to a markdown file');
+    console.log('  ' + chalk.green('exit') + '    - Exit the agent');
+    console.log('');
+    console.log(chalk.bold.yellow('Usage:'));
+    console.log('  Type your message and press Enter to send.');
+    console.log('  The agent can execute tools (bash, read, write) with your confirmation.');
+    console.log('');
+    console.log(chalk.bold.yellow('Keyboard Shortcuts:'));
+    console.log('  ' + chalk.dim('Ctrl+C') + '  - Exit the agent');
+    console.log('  ' + chalk.dim('Up/Down') + ' - Navigate command history');
+    console.log('');
+}
+
+// ============================================
+// COMMAND HANDLER
+// ============================================
+
+const commands = {
+    help: { fn: showHelp, description: 'Show help message' },
+    clear: { fn: clearConversation, description: 'Clear conversation history' },
+    rewind: { fn: rewindConversation, description: 'Undo last message and response' },
+    exit: { fn: exitAgent, description: 'Exit the agent' },
+};
+
+export async function handleCommand(trimmedInput, context) {
+    if (!commands[trimmedInput]) {
+        return false;
+    }
+
+    const command = commands[trimmedInput];
+    const { msgArray, provider, model, __dirname } = context;
+
+    if (trimmedInput === 'export') {
+        await exportConversation(msgArray, provider, model, __dirname);
+    } else if (['clear', 'rewind'].includes(trimmedInput)) {
+        command.fn(msgArray);
+    } else {
+        command.fn();
+    }
+
+    return true;
 }
