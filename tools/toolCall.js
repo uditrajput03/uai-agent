@@ -1,5 +1,7 @@
 import { log } from 'node:console';
 import { keys } from '../config/keys.js';
+import { readFile, writeFile } from './fsOps.js';
+import { bash } from './bash.js';
 
 export async function toolCall(parsed) {
     if (!parsed || typeof parsed !== 'object') {
@@ -15,7 +17,6 @@ export async function toolCall(parsed) {
     }
 
     if (tool === 'bash') {
-        const { bash } = await import('./bash.js');
         try {
             const result = await bash(input?.command);
             return result.stdout || result.stderr;
@@ -23,13 +24,11 @@ export async function toolCall(parsed) {
             return `Error executing bash command: ${error.message}`;
         }
     } else if (tool === 'read') {
-        const { readFile } = await import('./fsOps.js');
         if (!input?.filePath) {
             return 'Error: filePath is required for read tool';
         }
         return readFile(input?.filePath);
     } else if (tool === 'write') {
-        const { writeFile } = await import('./fsOps.js');
         if (!input?.filePath || !input?.content) {
             return 'Error: filePath and content are required for write tool';
         }

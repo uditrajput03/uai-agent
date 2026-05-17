@@ -11,6 +11,7 @@ import { keys } from './config/keys.js';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { addUserContext } from './tools/userAppend.js';
 
 // ============================================
 // CONFIGURATION
@@ -55,6 +56,8 @@ function printWelcome() {
     console.log(chalk.bold.cyan('║') + '  ' + chalk.yellow('Commands:') + '                                        ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('║') + '    ' + chalk.green('help') + '    - Show this help message               ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('║') + '    ' + chalk.green('clear') + '   - Clear conversation history           ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('rewind') + '  - Undo last message and response       ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('export') + '  - Export chat history to markdown      ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('║') + '    ' + chalk.green('exit') + '    - Exit the agent                       ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
     console.log(chalk.bold.cyan('║') + '  ' + chalk.dim('Press Ctrl+C at any time to exit') + '                 ' + chalk.bold.cyan('║'));
@@ -70,6 +73,8 @@ function showHelp() {
     console.log('\n' + chalk.bold.yellow('Help & Commands:'));
     console.log('  ' + chalk.green('help') + '    - Show this help message');
     console.log('  ' + chalk.green('clear') + '   - Clear conversation history (keeps system prompt)');
+    console.log('  ' + chalk.green('rewind') + '  - Undo the last message and assistant response');
+    console.log('  ' + chalk.green('export') + '  - Export chat history to a markdown file');
     console.log('  ' + chalk.green('exit') + '    - Exit the agent');
     console.log('');
     console.log(chalk.bold.yellow('Usage:'));
@@ -86,6 +91,81 @@ function clearConversation() {
     // Keep only the system prompt
     msgArray.length = 1;
     console.log(chalk.green('✓ Conversation history cleared.'));
+    console.log('');
+}
+
+function rewindConversation() {
+    // Find and remove the last user message and assistant response
+    // We need to remove the last user+assistant pair (skip any system messages)
+    let removedCount = 0;
+    let foundAssistant = false;
+    let foundUser = false;
+
+    // Remove from the end: first assistant, then user
+    let initialLength = msgArray.length;
+    for (let i = initialLength - 1; i > 0; i--) {
+        if (!foundAssistant && msgArray[i].role === 'assistant') {
+            msgArray.splice(i, 1);
+            foundAssistant = true;
+            removedCount++;
+        } else if (foundAssistant && !foundUser && msgArray[i].role === 'user') {
+            msgArray.splice(i, 1);
+            foundUser = true;
+            removedCount++;
+            break;
+        }
+    }
+
+    if (foundUser && foundAssistant) {
+        console.log(chalk.green(`✓ Rewound ${initialLength - msgArray.length} message(s).`));
+    } else if (removedCount > 0) {
+        console.log(chalk.green('✓ Removed last message(s).'));
+    } else {
+        console.log(chalk.yellow('⚠ Nothing to rewind.'));
+    }
+    console.log('');
+}
+
+async function exportConversation() {
+    // Filter out system messages, keep only user and assistant
+    const chatMessages = msgArray.filter(msg => msg.role === 'user' || msg.role === 'assistant');
+
+    if (chatMessages.length === 0) {
+        console.log(chalk.yellow('⚠ No conversation to export.'));
+        console.log('');
+        return;
+    }
+
+    // Build markdown content
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    let markdown = `# Chat Export - ${new Date().toLocaleString()}\n\n`;
+    markdown += `**Provider:** ${provider} | **Model:** ${model}\n\n`;
+    markdown += `---\n\n`;
+
+    for (const msg of chatMessages) {
+        if (msg.role === 'user') {
+            markdown += `## 👤 User\n\n${msg.content}\n\n`;
+        } else if (msg.role === 'assistant') {
+            markdown += `## 🤖 Assistant\n\n${msg.content}\n\n`;
+        }
+        markdown += `---\n\n`;
+    }
+
+    // Ask for filename
+    const defaultFilename = `chat-export-${timestamp}.md`;
+    const filenameInput = await askQuestion(chalk.yellow(`Enter filename (default: ${defaultFilename}): `));
+    const filename = filenameInput?.trim() || defaultFilename;
+
+    // Ensure .md extension
+    const finalFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+
+    try {
+        const exportPath = path.resolve(__dirname, finalFilename);
+        fs.writeFileSync(exportPath, markdown, 'utf-8');
+        console.log(chalk.green(`✓ Chat history exported to: ${finalFilename}`));
+    } catch (error) {
+        console.error(chalk.red('✗ Error exporting chat history:'), error.message);
+    }
     console.log('');
 }
 
@@ -176,11 +256,22 @@ async function main() {
         return;
     }
 
+    if (trimmedInput === 'rewind') {
+        rewindConversation();
+        return;
+    }
+
+    if (trimmedInput === 'export') {
+        await exportConversation();
+        return;
+    }
+
     // Skip empty input
     if (!inputMsg.trim()) {
         return;
     }
-
+    let userContext = await addUserContext(inputMsg);
+    inputMsg = userContext + "\nUser Message: " + inputMsg;
     // Add user message to conversation
     msgArray.push({ "role": "user", "content": inputMsg });
 
