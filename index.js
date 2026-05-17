@@ -5,13 +5,13 @@ import fs from 'fs';
 import { askQuestion, closeReadline, pauseReadline, resumeReadline } from './tools/askQuestion.js';
 import { toolCall } from './tools/toolCall.js';
 import { models } from './models.js';
-import { redact } from './tools/redact.js';
 import chalk from 'chalk';
 import { keys } from './config/keys.js';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { addUserContext } from './tools/userAppend.js';
+import { tools } from './config/tools.js';
 
 // ============================================
 // CONFIGURATION
@@ -30,19 +30,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const systemPath = path.resolve(__dirname, 'config/SYSTEM.md');
-const toolsPath = path.resolve(__dirname, 'config/TOOLS.md');
+// const toolsPath = path.resolve(__dirname, 'config/TOOLS.md');
 
 const agentPrompt = fs.readFileSync(systemPath, 'utf-8');
-const toolsPrompt = fs.readFileSync(toolsPath, 'utf-8');
-const systemPrompt = agentPrompt + "\n\n" + toolsPrompt;
+// const toolsPrompt = fs.readFileSync(toolsPath, 'utf-8');
+const systemPrompt = agentPrompt;
 
 const msgArray = [
     { "role": "system", "content": systemPrompt }
 ];
 
 let isToolCall = false;
-let toolResponse = '';
-
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
@@ -205,40 +203,18 @@ process.on('SIGTERM', () => {
 async function main() {
     let outmsg = '';
     let inputMsg = '';
-
+    let toolResponse = '';
+    let finalToolCalls = {};
+    let lastMessageWasTool = msgArray.length > 0 && msgArray[msgArray.length - 1].role === 'tool';
     // Handle tool response from previous iteration
-    if (isToolCall) {
-        toolResponse = redact(toolResponse.trim());
-        isToolCall = false;
-
-        console.log('\n' + chalk.blue('📋 Tool Response:'));
-        console.log(chalk.dim('─'.repeat(60)));
-        console.log(toolResponse);
-        console.log(chalk.dim('─'.repeat(60)));
-
-        let confirmation;
-        if (toolResponse) {
-            confirmation = await askQuestion(chalk.yellow('Send this response to the agent? (Y/n): '));
-            if (confirmation && confirmation.toLowerCase() === 'n') {
-                toolResponse = "\nTool response not sent to agent (cancelled by user).";
-                console.log(chalk.red('✗ Tool response not sent.'));
-            } else {
-                console.log(chalk.green('✓ Sending tool response to agent...'));
-            }
-        }
-
-        inputMsg = toolResponse + '\n' + (confirmation || 'y');
-        toolResponse = '';
-    } else {
-        inputMsg = await askQuestion(chalk.green.bold('You: '));
-    }
+    if (!lastMessageWasTool) inputMsg = await askQuestion(chalk.green.bold('You: '));
 
     // Handle null input (Ctrl+C during question)
-    if (inputMsg === null) {
+    if (inputMsg === null && !lastMessageWasTool) {
         return;
     }
 
-    const trimmedInput = inputMsg.trim().toLowerCase();
+    const trimmedInput = inputMsg?.trim()?.toLowerCase();
 
     // Handle special commands
     if (trimmedInput === 'exit') {
@@ -267,14 +243,15 @@ async function main() {
     }
 
     // Skip empty input
-    if (!inputMsg.trim()) {
+    if (!inputMsg.trim() && !lastMessageWasTool) {
         return;
     }
     let userContext = await addUserContext(inputMsg);
     inputMsg = userContext + "\nUser Message: " + inputMsg;
     // Add user message to conversation
-    msgArray.push({ "role": "user", "content": inputMsg });
-
+    if (!lastMessageWasTool) {
+        msgArray.push({ "role": "user", "content": inputMsg });
+    }
     if (keys.DEBUG === 'true') {
         console.log(chalk.dim('Message Array:'), msgArray);
     }
@@ -288,6 +265,7 @@ async function main() {
         const completion = await openai.chat.completions.create({
             ...models[provider][model],
             messages: msgArray,
+            tools: tools,
             stream: true,
         });
 
@@ -297,17 +275,38 @@ async function main() {
 
         let isFirstChunk = true;
         for await (const chunk of completion) {
+            if (keys.DEBUG == true) {
+                let toLog = chunk.choices[0]?.delta?.tool_calls
+                // if (toLog) console.log(toLog);
+            }
             let content = chunk.choices[0]?.delta?.content || '';
             let reasoning = chunk.choices[0]?.delta?.reasoning_content;
+            let toolCalls = chunk.choices[0]?.delta?.tool_calls;
 
             if (reasoning) {
-                process.stdout.write(chalk.dim('.'));
+                if (keys.showThinking == true) {
+                    process.stdout.write(chalk.dim.blue(reasoning));
+                }
+                else process.stdout.write(chalk.dim('.'));
                 continue;
             }
 
             if (isFirstChunk && content.trim()) {
                 process.stdout.write('\n');
                 isFirstChunk = false;
+            }
+
+            if (toolCalls) {
+                toolCalls.forEach(toolCall => {
+                    const { index } = toolCall;
+
+                    if (!finalToolCalls[index]) {
+                        finalToolCalls[index] = toolCall;
+                        delete finalToolCalls[index].index;
+                    }
+
+                    finalToolCalls[index].function.arguments += toolCall.function.arguments;
+                });
             }
 
             outmsg += content;
@@ -326,40 +325,29 @@ async function main() {
         console.error(chalk.red('✗ Error during AI API call:'), error.message);
         return;
     }
-
+    if (finalToolCalls && Object.keys(finalToolCalls).length > 0) {
+        finalToolCalls = Object.values(finalToolCalls);
+        if (keys.DEBUG === 'true') {
+            console.log(JSON.stringify(finalToolCalls, null, 2));
+        }
+        outmsg = finalToolCalls
+        msgArray.push({ "role": "assistant", "content": null, tool_calls: finalToolCalls });
+    }
+    else {
+        msgArray.push({ "role": "assistant", "content": outmsg });
+    }
     // Add assistant response to conversation
-    msgArray.push({ "role": "assistant", "content": outmsg });
 
     // Check for tool calls
-    if (outmsg.includes("```json")) {
-        const regex = /```json\s*(\{[\s\S]*?\})\s*```/;
-        const toolJson = outmsg.match(regex)?.[1];
-        let parsed;
-
-        if (!toolJson) {
-            console.log(chalk.yellow('⚠ No tool call JSON found in the output.'));
-            return;
-        }
-
+    if (finalToolCalls && finalToolCalls.length > 0) {
         isToolCall = true;
-
-        try {
-            parsed = JSON.parse(toolJson);
-        } catch (error) {
-            console.log(chalk.red(`✗ Invalid JSON in tool call: ${error.message}`));
-            toolResponse = `Error parsing tool call JSON: ${error.message}`;
-            return;
-        }
-
-        if (!parsed.tool || !parsed.input) {
-            console.log(chalk.red('✗ Invalid tool call: missing tool or input property'));
-            toolResponse = 'Invalid tool call: missing tool or input property';
-            return;
-        }
-
         console.log('\n' + chalk.bgYellow.black(' ⚡ Tool Call Detected '));
-        console.log(chalk.yellow('  Tool: ') + chalk.bold(parsed.tool));
-        console.log(chalk.yellow('  Input: ') + chalk.dim(JSON.stringify(parsed.input, null, 2)));
+        finalToolCalls.forEach((toolCall, index) => {
+            console.log(chalk.yellow(`Tool Call #${index + 1}:`));
+            console.log(chalk.yellow('  Tool: ') + chalk.bold(toolCall.function.name));
+            toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+            console.log(chalk.yellow('  Input: ') + chalk.dim(JSON.stringify(toolCall.function.arguments, null, 2)));
+        });
 
         const confirmation = await askQuestion(chalk.yellow('Execute this tool call? (y/N): '));
 
@@ -369,16 +357,36 @@ async function main() {
         } else {
             console.log(chalk.green('✓ Executing tool...'));
             try {
-                const response = await toolCall(parsed);
-                toolResponse = `\nTool call ${parsed.tool} result: ${response}`;
+                const response = await toolCall(finalToolCalls);
+                toolResponse = response || "\nTool executed successfully with no response.";
             } catch (error) {
                 toolResponse = `\nError executing tool call: ${error.message}`;
                 console.error(chalk.red('✗') + chalk.red(toolResponse));
             }
         }
     }
-}
+    if (toolResponse) {
+        console.log('\n' + chalk.blue('📋 Tool Response:'));
+        console.log(chalk.dim('─'.repeat(60)));
+        console.log(toolResponse);
+        console.log(chalk.dim('─'.repeat(60)));
 
+        let confirmation = await askQuestion(chalk.yellow('Send this response to the agent? (Y/n): '));
+        if (confirmation && confirmation.toLowerCase().startsWith('n')) {
+            toolResponse = "\nTool response not sent to agent (cancelled by user)." + confirmation;
+            console.log(chalk.red('✗ Tool response not sent.'));
+        } else {
+            console.log(chalk.green('✓ Sending tool response to agent...'));
+        }
+        if (Array.isArray(toolResponse)) {
+            msgArray.push(...toolResponse);
+        }
+        else {
+            msgArray.push({ role: "tool", content: toolResponse });
+        }
+    }
+    finalToolCalls = {};
+}
 // ============================================
 // START
 // ============================================
