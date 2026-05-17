@@ -1,7 +1,8 @@
 import { keys } from '../config/keys.js';
 import { readFile, writeFile, editFile } from './fsOps.js';
-import { bash } from './bash.js';
+import { bash, safeBashApproval } from './bash.js';
 import { redact } from '../utils/redact.js';
+import { safePathApproval } from '../utils/approval.js';
 
 export async function toolCall(finalToolCalls) {
     if (!finalToolCalls || !Array.isArray(finalToolCalls) || finalToolCalls.length === 0) {
@@ -30,8 +31,13 @@ export async function toolCall(finalToolCalls) {
         }
         if (tool === 'bash') {
             try {
-                const result = await bash(input?.command);
-                output = result.stdout || result.stderr;
+                const approval = await safeBashApproval(input?.command);
+                if (!approval.approved) {
+                    output = approval.reason;
+                } else {
+                    const result = await bash(input?.command);
+                    output = result.stdout || result.stderr;
+                }
             } catch (error) {
                 output = `Error executing bash command: ${error.message}`;
             }
@@ -39,19 +45,34 @@ export async function toolCall(finalToolCalls) {
             if (!input?.filePath) {
                 output = 'Error: filePath is required for read tool';
             } else {
-                output = readFile(input?.filePath);
+                const approval = await safePathApproval(input.filePath);
+                if (!approval.status) {
+                    output = approval.reason;
+                } else {
+                    output = readFile(input?.filePath);
+                }
             }
         } else if (tool === 'write') {
             if (!input?.filePath || !input?.content) {
                 output = 'Error: filePath and content are required for write tool';
             } else {
-                output = writeFile(input?.filePath, input?.content);
+                const approval = await safePathApproval(input.filePath);
+                if (!approval.status) {
+                    output = approval.reason;
+                } else {
+                    output = writeFile(input?.filePath, input?.content);
+                }
             }
         } else if (tool === 'edit') {
             if (!input?.filePath || !input?.oldContent || !input?.newContent) {
                 output = 'Error: filePath, oldContent, and newContent are required for edit tool';
             } else {
-                output = editFile(input?.filePath, input?.oldContent, input?.newContent);
+                const approval = await safePathApproval(input.filePath);
+                if (!approval.status) {
+                    output = approval.reason;
+                } else {
+                    output = editFile(input?.filePath, input?.oldContent, input?.newContent);
+                }
             }
         }
         else {

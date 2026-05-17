@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { askQuestion, closeReadline } from './askQuestion.js';
 import { models } from '../config.js';
+import { search } from '@inquirer/prompts';
 
 export function clearConversation(msgArray) {
     msgArray.length = 1;
@@ -101,109 +102,72 @@ export function exitAgent() {
 }
 
 export function showHelp() {
-    console.log('\n' + chalk.bold.yellow('Help & Commands:'));
-    console.log('  ' + chalk.green('help') + '    - Show this help message');
-    console.log('  ' + chalk.green('clear') + '   - Clear conversation history (keeps system prompt)');
-    console.log('  ' + chalk.green('rewind') + '  - Undo the last message and assistant response');
-    console.log('  ' + chalk.green('export') + '  - Export chat history to a markdown file');
-    console.log('  ' + chalk.green('model') + '   - Change the current model/provider');
-    console.log('  ' + chalk.green('exit') + '    - Exit the agent');
+    console.log('\n' + chalk.bold.yellow('⌨  Help & Commands:'));
+    console.log('  ' + chalk.cyan('/help') + '     ' + chalk.dim('Show this help message'));
+    console.log('  ' + chalk.cyan('/clear') + '    ' + chalk.dim('Clear conversation history (keeps system prompt)'));
+    console.log('  ' + chalk.cyan('/rewind') + '   ' + chalk.dim('Undo the last message and assistant response'));
+    console.log('  ' + chalk.cyan('/export') + '   ' + chalk.dim('Export chat history to a markdown file'));
+    console.log('  ' + chalk.cyan('/model') + '    ' + chalk.dim('Change the current model/provider'));
+    console.log('  ' + chalk.cyan('/exit') + '     ' + chalk.dim('Exit the agent'));
     console.log('');
-    console.log(chalk.bold.yellow('Usage:'));
-    console.log('  Type your message and press Enter to send.');
-    console.log('  The agent can execute tools (bash, read, write) with your confirmation.');
+    console.log(chalk.bold.yellow('💡 Usage:'));
+    console.log('  Type your message and press Enter to chat.');
+    console.log('  The agent can execute tools (bash, read, write, edit) with your confirmation.');
     console.log('');
-    console.log(chalk.bold.yellow('Keyboard Shortcuts:'));
-    console.log('  ' + chalk.dim('Ctrl+C') + '  - Exit the agent');
-    console.log('  ' + chalk.dim('Up/Down') + ' - Navigate command history');
+    console.log(chalk.bold.yellow('⌨  Keyboard Shortcuts:'));
+    console.log('  ' + chalk.dim('Ctrl+C') + '   ' + chalk.dim('Interrupt / exit'));
+    console.log('  ' + chalk.dim('↑ / ↓') + '    ' + chalk.dim('Navigate command history'));
     console.log('');
 }
 
 export async function changeModel(context) {
     const { config } = context;
+    const current = (config.provider && config.model)
+        ? `${config.provider}/${config.model}`
+        : 'None';
 
-    console.log('\n' + chalk.bold.yellow('Available Models:'));
+    console.log(chalk.dim(`Current Model: ${current}\n`));
 
-    // Handle empty or missing provider/model
-    const currentProvider = config.provider || 'none';
-    const currentModel = config.model || 'none';
-    const hasValidConfig = !!(config.provider && config.model);
-
-    if (hasValidConfig) {
-        console.log(chalk.dim(`  Current: ${currentProvider}/${currentModel}`));
-    } else {
-        console.log(chalk.yellow(`  Current: ${currentProvider}/${currentModel} (not set)`));
-    }
-    console.log('');
-
-    // Build a list of all available models grouped by provider
-    const availableModels = [];
+    // 1. Build all model choices
+    const allChoices = [];
     for (const [providerKey, providerData] of Object.entries(models)) {
         for (const [modelKey] of Object.entries(providerData)) {
             if (['apiKey', 'baseURL'].includes(modelKey)) continue;
-            availableModels.push({ provider: providerKey, model: modelKey });
+
+            const value = { provider: providerKey, model: modelKey };
+            allChoices.push({
+                name: `${providerKey}/${modelKey}`,
+                value: value,
+                description: `Switch to ${modelKey} from ${providerKey}`
+            });
         }
     }
 
-    // Display numbered list
-    availableModels.forEach((item, index) => {
-        const isActive = hasValidConfig && item.provider === config.provider && item.model === config.model;
-        const prefix = isActive ? chalk.green('→ ') : '  ';
-        const label = isActive ? chalk.green(`${item.provider}/${item.model} (active)`) : `${item.provider}/${item.model}`;
-        console.log(`${prefix}${chalk.dim(`${index + 1}.`)} ${label}`);
+    // 2. Trigger the search prompt
+    const selection = await search({
+        message: 'Search for a model:',
+        source: async (term, { signal }) => {
+            if (!term) return allChoices;
+
+            const lower = term.toLowerCase();
+            return allChoices.filter(choice =>
+                choice.name.toLowerCase().includes(lower)
+            );
+        },
+        pageSize: 10,
     });
 
-    console.log('');
-    const selection = await askQuestion(chalk.yellow('Select model (number or provider/model) or press Enter to cancel: '));
-
-    if (!selection?.trim()) {
-        console.log(chalk.dim('Model change cancelled.'));
-        console.log('');
+    if (!selection) {
+        console.log(chalk.dim('Model change cancelled.\n'));
         return;
     }
 
-    let newProvider, newModel;
+    // 3. Apply the config
+    config.provider = selection.provider;
+    config.model = selection.model;
 
-    // Try parsing as number
-    const num = parseInt(selection.trim());
-    if (!isNaN(num) && num >= 1 && num <= availableModels.length) {
-        newProvider = availableModels[num - 1].provider;
-        newModel = availableModels[num - 1].model;
-    } else {
-        // Try parsing as provider/model
-        const parts = selection.trim().split('/');
-        if (parts.length === 2) {
-            newProvider = parts[0].toLowerCase().trim();
-            newModel = parts[1].toLowerCase().trim();
-        } else {
-            console.log(chalk.red('✗ Invalid format. Use number or provider/model (e.g., alibaba/qwen).'));
-            console.log('');
-            return;
-        }
-    }
-
-    // Validate selection
-    if (!models[newProvider]) {
-        console.log(chalk.red(`✗ Provider '${newProvider}' not found.`));
-        console.log('');
-        return;
-    }
-    if (!models[newProvider][newModel]) {
-        console.log(chalk.red(`✗ Model '${newModel}' not found for provider '${newProvider}'.`));
-        console.log('');
-        return;
-    }
-
-    // Update the config
-    config.provider = newProvider;
-    config.model = newModel;
-
-    console.log('');
-    console.log(chalk.green(`✓ Model changed to: ${newProvider}/${newModel}`));
-    console.log(chalk.dim('Tip: Consider using "clear" to start fresh with the new model.'));
-    console.log('');
+    console.log(chalk.green(`\n✓ Model changed to: ${config.provider}/${config.model}\n`));
 }
-
 // ============================================
 // COMMAND HANDLER
 // ============================================
@@ -218,20 +182,23 @@ const commands = {
 };
 
 export async function handleCommand(trimmedInput, context) {
-    if (!commands[trimmedInput]) {
+    // Strip leading slash if present (e.g., "/model" → "model")
+    const commandKey = trimmedInput.startsWith('/') ? trimmedInput.slice(1) : trimmedInput;
+
+    if (!commands[commandKey]) {
         return false;
     }
 
-    const command = commands[trimmedInput];
+    const command = commands[commandKey];
     const { msgArray, config, __dirname } = context;
     const provider = config.provider || 'none';
     const model = config.model || 'none';
 
-    if (trimmedInput === 'export') {
+    if (commandKey === 'export') {
         await command.fn(msgArray, provider, model, __dirname);
-    } else if (trimmedInput === 'model') {
+    } else if (commandKey === 'model') {
         await command.fn(context);
-    } else if (['clear', 'rewind'].includes(trimmedInput)) {
+    } else if (['clear', 'rewind'].includes(commandKey)) {
         command.fn(msgArray);
     } else {
         command.fn();

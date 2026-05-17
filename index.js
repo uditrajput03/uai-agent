@@ -224,7 +224,7 @@ async function main() {
         }
     }
     if (toolResponse) {
-        printToolResponse(toolResponse);
+        printToolResponse(toolResponse, finalToolCalls);
         const { sendingApproval } = getApprovalRequirements(finalToolCalls);
         let confirmation;
         if (sendingApproval) {

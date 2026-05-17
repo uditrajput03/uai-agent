@@ -38,9 +38,44 @@ export function printToolCallInfo(finalToolCalls) {
     });
 }
 
-export function printToolResponse(toolResponse) {
+export function printToolResponse(toolResponse, toolCalls) {
     console.log('\n' + chalk.blue('📋 Tool Response:'));
     console.log(chalk.dim('─'.repeat(60)));
-    console.log(toolResponse);
+
+    // 1. Print the output FIRST
+    const displayResponse = toolResponse
+        ? toolResponse
+        : chalk.dim('No output returned.');
+    console.log(displayResponse);
+
     console.log(chalk.dim('─'.repeat(60)));
+
+    // 2. Print the context at the BOTTOM (No scrolling needed!)
+    const calls = Array.isArray(toolCalls) ? toolCalls : (toolCalls ? [toolCalls] : []);
+
+    if (calls.length > 0) {
+        calls.forEach(call => {
+            const toolName = call.function?.name || 'Unknown';
+            let args = call.function?.arguments || '';
+
+            // Clean up the arguments for display
+            try {
+                const parsedArgs = JSON.parse(args);
+                if (toolName === 'bash' && parsedArgs.command) {
+                    args = parsedArgs.command; // Just show the raw command string
+                } else {
+                    args = JSON.stringify(parsedArgs); // Keep it on one line for a clean footer
+                }
+            } catch (e) {
+                // Fallback to raw string if parsing fails
+            }
+
+            console.log(
+                chalk.yellow('Related to Tool: ') +
+                chalk.bold(toolName) +
+                chalk.dim(' | Input: ') +
+                chalk.cyan(args)
+            );
+        });
+    }
 }
