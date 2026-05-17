@@ -80,4 +80,8 @@ export const autoApprove = {
         execution: false,
         sending: true,
     },
+    edit: {
+        execution: false,
+        sending: true,
+    },
 };

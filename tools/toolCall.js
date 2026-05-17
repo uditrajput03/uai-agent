@@ -1,5 +1,5 @@
 import { keys } from '../config/keys.js';
-import { readFile, writeFile } from './fsOps.js';
+import { readFile, writeFile, editFile } from './fsOps.js';
 import { bash } from './bash.js';
 import { redact } from '../utils/redact.js';
 
@@ -38,15 +38,21 @@ export async function toolCall(finalToolCalls) {
         } else if (tool === 'read') {
             if (!input?.filePath) {
                 output = 'Error: filePath is required for read tool';
-                continue;
+            } else {
+                output = readFile(input?.filePath);
             }
-            output = readFile(input?.filePath);
         } else if (tool === 'write') {
             if (!input?.filePath || !input?.content) {
                 output = 'Error: filePath and content are required for write tool';
-                continue;
+            } else {
+                output = writeFile(input?.filePath, input?.content);
             }
-            output = writeFile(input?.filePath, input?.content);
+        } else if (tool === 'edit') {
+            if (!input?.filePath || !input?.oldContent || !input?.newContent) {
+                output = 'Error: filePath, oldContent, and newContent are required for edit tool';
+            } else {
+                output = editFile(input?.filePath, input?.oldContent, input?.newContent);
+            }
         }
         else {
             console.log(`Unknown tool requested: ${tool}`);

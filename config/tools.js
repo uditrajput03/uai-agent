@@ -59,5 +59,32 @@ export const tools = [
                 additionalProperties: false,
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "edit",
+            description: "Edit a file by replacing a specific string with new content. e.g (edit ./file.txt 'old text' 'new text')",
+            strict: true,
+            parameters: {
+                type: "object",
+                properties: {
+                    filePath: {
+                        type: "string",
+                        description: "The path to the file to edit. e.g (./file.txt)"
+                    },
+                    oldContent: {
+                        type: "string",
+                        description: "The exact text to find and replace in the file. e.g ('old text')"
+                    },
+                    newContent: {
+                        type: "string",
+                        description: "The new text to replace the old content with. e.g ('new text')"
+                    }
+                },
+                required: ["filePath", "oldContent", "newContent"],
+                additionalProperties: false,
+            }
+        }
     }
 ];
