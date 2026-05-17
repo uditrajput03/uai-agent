@@ -3,6 +3,7 @@ import { stdin as input, stdout as output } from 'node:process';
 
 // Singleton readline interface for better UX
 let rl = null;
+let savedHistory = [];
 
 function getReadline() {
     if (!rl) {
@@ -12,6 +13,7 @@ function getReadline() {
             historySize: 100,
             tabSize: 4
         });
+        rl.history = savedHistory;
     }
     return rl;
 }
@@ -19,32 +21,50 @@ function getReadline() {
 export async function askQuestion(inputText) {
     const rlInstance = getReadline();
     try {
-        const answer = await rlInstance.question(inputText);
-        return answer;
+        return await rlInstance.question(inputText);
     } catch (error) {
         // Handle Ctrl+C gracefully
         if (error.code === 'ABORT_ERR' || error.name === 'AbortError') {
             return null;
         }
         throw error;
+    } finally {
+        closeReadline();
     }
 }
 
 export function closeReadline() {
     if (rl) {
+        savedHistory = rl.history;
         rl.close();
         rl = null;
     }
 }
 
+let blockInputHandler = null;
+
 export function pauseReadline() {
-    if (rl) {
-        rl.pause();
+    if (process.stdin.isTTY) {
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+
+        if (!blockInputHandler) {
+            blockInputHandler = (data) => {
+                if (data.toString() === '\x03') { // Ctrl+C
+                    process.emit('SIGINT');
+                }
+            };
+            process.stdin.on('data', blockInputHandler);
+        }
     }
 }
 
 export function resumeReadline() {
-    if (rl) {
-        rl.resume();
+    if (process.stdin.isTTY) {
+        process.stdin.setRawMode(false);
+        if (blockInputHandler) {
+            process.stdin.off('data', blockInputHandler);
+            blockInputHandler = null;
+        }
     }
 }
