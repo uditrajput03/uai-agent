@@ -3,6 +3,100 @@ import { autoApprove } from "../config.js";
 import path from "path";
 import fs from "fs";
 import { askQuestion } from "./askQuestion.js";
+import { keys } from "../config/keys.js";
+
+function parseGitignore(gitignorePath) {
+    const patterns = [];
+    if (!fs.existsSync(gitignorePath)) {
+        return patterns;
+    }
+
+    const content = fs.readFileSync(gitignorePath, 'utf-8');
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        // Skip empty lines and comments
+        if (!trimmed || trimmed.startsWith('#')) {
+            continue;
+        }
+        patterns.push(trimmed);
+    }
+
+    return patterns;
+}
+
+function matchGitignorePattern(filePath, pattern, cwd) {
+    const relativePath = path.relative(cwd, filePath);
+    const basename = path.basename(filePath);
+
+    // Handle directory patterns (ending with /)
+    if (pattern.endsWith('/')) {
+        const dirPattern = pattern.slice(0, -1);
+        if (relativePath === dirPattern || relativePath.startsWith(dirPattern + '/') ||
+            relativePath.includes('/' + dirPattern + '/') || relativePath.endsWith('/' + dirPattern)) {
+            return true;
+        }
+        // Check if any part of the path matches the directory pattern
+        const pathParts = relativePath.split('/');
+        if (pathParts.includes(dirPattern)) {
+            return true;
+        }
+    }
+
+    // Handle wildcard patterns
+    if (pattern.includes('*')) {
+        const regexPattern = pattern
+            .replace(/\./g, '\\.')
+            .replace(/\*\*/g, '.*')
+            .replace(/\*/g, '[^/]*');
+        const regex = new RegExp(`^${regexPattern}$`);
+        if (regex.test(relativePath) || regex.test(basename)) {
+            return true;
+        }
+        // Also check with ** for any path depth
+        const doubleStarPattern = pattern.replace(/\*/g, '.*');
+        const doubleStarRegex = new RegExp(`^${doubleStarPattern}$`);
+        if (doubleStarRegex.test(relativePath)) {
+            return true;
+        }
+    }
+
+    // Handle exact matches
+    if (relativePath === pattern || basename === pattern) {
+        return true;
+    }
+
+    // Handle patterns without leading slash (match anywhere in path)
+    if (!pattern.startsWith('/')) {
+        if (relativePath.endsWith('/' + pattern) || relativePath === pattern) {
+            return true;
+        }
+        // Check if pattern matches any file in subdirectories
+        const pathParts = relativePath.split('/');
+        for (let i = 0; i < pathParts.length; i++) {
+            const subpath = pathParts.slice(i).join('/');
+            if (subpath === pattern || subpath.startsWith(pattern + '/')) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+function isPathInGitignore(filePath, cwd) {
+    const gitignorePath = path.join(cwd, '.gitignore');
+    const patterns = parseGitignore(gitignorePath);
+
+    for (const pattern of patterns) {
+        if (matchGitignorePattern(filePath, pattern, cwd)) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 export async function getApprovalRequirements(toolCalls) {
     let mode = autoApprove.default;
@@ -36,7 +130,7 @@ export async function getApprovalRequirements(toolCalls) {
                 if (filePath) {
                     const approval = await safePathApproval(filePath, true);
                     if (!approval.status) {
-                        console.log(approval);
+                        // console.log(approval);
                         hasUnsafePath = true;
                         break; // Short-circuit: stop checking further calls
                     }
@@ -79,6 +173,23 @@ export async function safePathApproval(filepath, noPrompt = false) {
     const isWithinCwd = truePath === cwd || truePath.startsWith(cwd + path.sep);
 
     if (isWithinCwd) {
+        // Check if the path matches any pattern in .gitignore
+        if (isPathInGitignore(resolvedPath, cwd) && keys?.gitIgnoreUnsafePaths) {
+            toReturn.reason = `✗ STRICTLY Rule Path or file is marked as Unsafe and Sensitive do not access it. (matches .gitignore pattern): ${filepath}`;
+            //ask for approval
+            if (!noPrompt) {
+                const answer = await askQuestion(chalk.yellow(`\n⚠️  Marked as unsafe by .gitignore. File: ${filepath} \nDo you want to allow this? [enter/n]: `));
+                if (answer.startsWith('y') || answer === '') {
+                    console.log(chalk.green(`✓ Access granted by user despite .gitignore match.\n`));
+                    toReturn.status = true;
+                    toReturn.reason = `✓ Access granted by user despite .gitignore match: ${filepath}`;
+                } else {
+                    console.log(chalk.red(`✗ Access denied by user due to .gitignore match.\n`));
+                }
+            }
+            return toReturn;
+        }
+
         toReturn.status = true;
         toReturn.reason = `✓ Path is within working directory: ${filepath}`;
         return toReturn; // Path is safe, automatic approval
