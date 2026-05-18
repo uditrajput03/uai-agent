@@ -75,6 +75,26 @@ export const models = {
         glm: {
             model: "GLM-4.7-Flash",
         }
+    },
+    openai: {
+        apiKey: keys.OPENAI_API_KEY,
+        baseURL: keys.OPENAI_BASE_URL,
+        gpt55: {
+            model: "gpt-5.5",
+            extra_body: { "enable_thinking": true }
+        },
+        gpt54: {
+            model: "gpt-5.4",
+            extra_body: { "enable_thinking": true }
+        },
+        gpt52: {
+            model: "gpt-5.2",
+            extra_body: { "enable_thinking": true }
+        },
+        gpt54mini: {
+            model: "gpt-5.4-mini",
+            extra_body: { "enable_thinking": true }
+        },
     }
 };
 
