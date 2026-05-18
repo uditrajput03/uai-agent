@@ -104,7 +104,9 @@ async function main() {
         return;
     }
     let userContext = await addUserContext(inputMsg);
-    inputMsg = userContext + "\nUser Message: " + inputMsg;
+    if (userContext) {
+        inputMsg = userContext + "\nUser Message: " + inputMsg;
+    }
     // Add user message to conversation
     if (!lastMessageWasTool) {
         msgArray.push({ "role": "user", "content": inputMsg });
@@ -187,8 +189,21 @@ async function main() {
         resumeReadline();
         process.stdout.write('\r' + ' '.repeat(20) + '\r');
         console.error(chalk.red('✗ Error during AI API call:'), error.message);
+
+        // FIX: Pause execution and wait for user input to break the infinite loop
+        const action = await askQuestion(chalk.yellow('⚠ Press Enter to retry, or type "cancel" to abort: '));
+
+        if (action?.trim().toLowerCase() === 'cancel') {
+            msgArray.pop();
+            console.log(chalk.red('✗ Action cancelled.'));
+        } else if (!lastMessageWasTool) {
+            msgArray.pop();
+            console.log(chalk.dim('Tip: Press the Up arrow key to quickly retrieve your previous message.'));
+        }
+
         return;
     }
+
     if (finalToolCalls && Object.keys(finalToolCalls).length > 0) {
         finalToolCalls = Object.values(finalToolCalls);
         if (keys.DEBUG === 'true') {
