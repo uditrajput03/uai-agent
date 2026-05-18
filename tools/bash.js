@@ -1,190 +1,236 @@
-import { exec } from 'child_process';
-import { redact } from '../utils/redact.js';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import chalk from 'chalk';
 import { askQuestion } from '../utils/askQuestion.js';
+import { redact } from '../utils/redact.js';
+import { resolveWorkspacePath } from '../utils/pathSecurity.js';
 
-// ============================================
-// SENSITIVE COMMANDS PROTECTION
-// ============================================
+const execFileAsync = promisify(execFile);
 
-// List of dangerous commands that should be blocked
 const BLOCKED_COMMANDS = [
-    'rm -rf /',
-    'rm -rf /*',
-    'mkfs',
-    'dd if=',
-    'chmod -R 000',
-    'chown -R',
-    ':(){:|:&};:',
-    'fork bomb',
-    'shutdown',
-    'reboot',
-    'init 0',
-    'init 6',
-    'halt',
-    'poweroff',
-    'killall',
-    'kill -9 -1',
-    'crontab -r',
-    'userdel',
-    'groupdel',
-    'passwd root',
-    'iptables -F',
-    'ufw disable',
-    'eval',
-    'exec ',
-    'nc -e',
-    'bash -i',
-    '/dev/tcp/',
-    '/dev/udp',
-    'chroot',
-    'mount --bind',
-    'fdisk',
-    'parted',
-    'sed -i.*/etc',
-    'cat /etc/passwd',
-    'cat /etc/shadow'
+    'rm -rf /', 'rm -rf /*', 'mkfs', 'dd if=', 'chmod -R 000', 'chown -R',
+    ':(){:|:&};:', 'fork bomb', 'shutdown', 'reboot', 'init 0', 'init 6',
+    'halt', 'poweroff', 'killall', 'kill -9 -1', 'crontab -r', 'userdel',
+    'groupdel', 'passwd root', 'iptables -F', 'ufw disable', 'eval', 'exec ',
+    'nc -e', 'bash -i', '/dev/tcp/', '/dev/udp', 'chroot', 'mount --bind',
+    'fdisk', 'parted', 'sed -i.*/etc', 'cat /etc/passwd', 'cat /etc/shadow'
 ];
 
-// Commands requiring additional confirmation
 const DESTRUCTIVE_COMMANDS = [
-    'rm -rf',
-    'rm -r',
-    'rm -f',
-    'del',
-    'format',
-    'truncate',
-    'drop database',
-    'drop table',
-    'delete from',
-    'docker rm',
-    'docker rmi',
-    'docker stop',
-    'git reset --hard',
-    'git push --force'
+    'rm -rf', 'rm -r', 'rm -f', 'del', 'format', 'truncate', 'drop database',
+    'drop table', 'delete from', 'docker rm', 'docker rmi', 'docker stop',
+    'git reset --hard', 'git push --force'
 ];
 
-const SAFE_COMMANDS = new Set([
-    'ls', 'dir', 'pwd', 'echo', 'cat', 'head', 'tail',
-    'find', 'grep', 'wc'
+const ALLOWED_COMMANDS = new Set([
+    'ls', 'dir', 'pwd', 'echo', 'cat', 'head', 'tail', 'find', 'grep', 'wc',
+    'git', 'npm', 'node', 'true', 'false', 'seq'
 ]);
 
-const DANGEROUS_OPERATORS = [';', '&&', '||', '|', '`', '$(', '>', '>>', '<'];
+const AUTO_SAFE_COMMANDS = new Set(['ls', 'dir', 'pwd', 'echo', 'cat', 'head', 'tail', 'find', 'grep', 'wc', 'true', 'seq']);
+const SHELL_METACHARS = /[;&|`$<>\n\r]/;
+const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:/;
+const ABSOLUTE_PATH_SEGMENT = /(^|[\s:=])\/(?!\/)/;
+const TRAVERSAL_SEGMENT = /(^|[\\/])\.\.([\\/]|$)/;
 
-export async function safeBashApproval(command) {
-    let toReturn = { approved: false, reason: '' };
-    const trimmedCommand = command.trim();
+function tokenize(command) {
+    const tokens = [];
+    let current = '';
+    let quote = null;
+    let escaped = false;
 
-    // 1. Check for command chaining and file redirection
-    const containsDangerousOperators = DANGEROUS_OPERATORS.some(op => trimmedCommand.includes(op));
-    const containsExecFlag = trimmedCommand.includes('-exec');
-
-    // 2. DIRECTORY PROTECTION: Check for out-of-bounds path patterns
-    const hasDirectoryTraversal = trimmedCommand.includes('../') || trimmedCommand.includes('..\\');
-
-    // Checks for Unix absolute paths (e.g., `cat /etc/passwd` or starting a command with `/bin/sh`)
-    const hasUnixAbsolutePath = trimmedCommand.startsWith('/') || trimmedCommand.includes(' /') || trimmedCommand.includes('~/');
-
-    // Checks for Windows absolute paths (e.g., `dir C:\Windows`)
-    const hasWindowsAbsolutePath = /[a-zA-Z]:[\\/]/.test(trimmedCommand);
-
-    const isPathOut_of_Bounds = hasDirectoryTraversal || hasUnixAbsolutePath || hasWindowsAbsolutePath;
-
-    // 3. Auto-Approve Logic
-    if (!containsDangerousOperators && !containsExecFlag && !isPathOut_of_Bounds) {
-        const baseCommand = trimmedCommand.split(' ')[0];
-
-        const isSafeGit = trimmedCommand.startsWith('git status') ||
-            trimmedCommand.startsWith('git log') ||
-            trimmedCommand.startsWith('git diff');
-
-        if (SAFE_COMMANDS.has(baseCommand) || isSafeGit) {
-            toReturn.approved = true;
-            toReturn.reason = `Auto-approved safe command: ${trimmedCommand}`;
-            console.log(chalk.dim(toReturn.reason));
-            return toReturn;
+    for (const char of command.trim()) {
+        if (escaped) {
+            current += char;
+            escaped = false;
+            continue;
         }
+
+        if (char === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (quote) {
+            if (char === quote) quote = null;
+            else current += char;
+            continue;
+        }
+
+        if (char === '"' || char === "'") {
+            quote = char;
+            continue;
+        }
+
+        if (/\s/.test(char)) {
+            if (current) {
+                tokens.push(current);
+                current = '';
+            }
+            continue;
+        }
+
+        current += char;
     }
 
-    console.log(chalk.yellow(`\n⚠️ The AI wants to execute a terminal command:`));
-    console.log(chalk.cyan(`   $ ${trimmedCommand}`));
-
-    if (isPathOut_of_Bounds) {
-        console.log(chalk.red(`   (Flagged: AI is trying to access paths outside the current directory)`));
-    }
-
-    const answer = await askQuestion(chalk.yellow('Do you want to allow this command to run? [Y/n]: '));
-
-    if (answer === null || answer.trim().toLowerCase().startsWith('n')) {
-        toReturn.reason = `Command execution denied by user.`;
-        console.log(chalk.red(`${toReturn.reason}\n`));
-        toReturn.approved = false;
-        return toReturn;
-    }
-    else {
-        toReturn.approved = true;
-        toReturn.reason = `Command execution granted by user.`;
-    }
-    console.log(chalk.green(`✓ Command execution granted.\n`));
-    return toReturn;
+    if (escaped) current += '\\';
+    if (quote) return { ok: false, reason: 'Command blocked: unterminated quote' };
+    if (current) tokens.push(current);
+    return { ok: true, tokens };
 }
 
-// Check if command contains dangerous patterns
 function isCommandBlocked(command) {
-    const lowerCommand = command.toLowerCase();
+    const lower = command.toLowerCase();
     for (const blocked of BLOCKED_COMMANDS) {
-        if (lowerCommand.includes(blocked.toLowerCase())) {
-            return { blocked: true, pattern: blocked };
-        }
+        if (lower.includes(blocked.toLowerCase())) return { blocked: true, pattern: blocked };
     }
     return { blocked: false, pattern: null };
 }
 
-// Check if command is potentially destructive
 function isDestructive(command) {
-    const lowerCommand = command.toLowerCase();
-    for (const destructive of DESTRUCTIVE_COMMANDS) {
-        if (lowerCommand.includes(destructive.toLowerCase())) {
-            return true;
+    const lower = command.toLowerCase();
+    return DESTRUCTIVE_COMMANDS.some(pattern => lower.includes(pattern.toLowerCase()));
+}
+
+function tokenContainsUnsafePath(token) {
+    return token.startsWith('~')
+        || token.includes('~/')
+        || token.includes('~\\')
+        || WINDOWS_ABSOLUTE_PATH.test(token)
+        || ABSOLUTE_PATH_SEGMENT.test(token)
+        || TRAVERSAL_SEGMENT.test(token)
+        || token.includes('../')
+        || token.includes('..\\');
+}
+
+function validateWorkspacePathToken(token) {
+    // Plain paths can be resolved directly. Embedded paths (e.g. --file=/tmp/x,
+    // script snippets, URLs) are rejected instead of trying to parse intent.
+    const looksPlainPath = token.startsWith('/') || token.startsWith('../') || token.startsWith('..\\')
+        || token.startsWith('~/') || token.startsWith('~\\') || WINDOWS_ABSOLUTE_PATH.test(token);
+
+    if (looksPlainPath) {
+        const pathCheck = WINDOWS_ABSOLUTE_PATH.test(token)
+            ? { ok: false, reason: `Path outside workspace is not allowed: ${token}` }
+            : resolveWorkspacePath(token, { requireParent: false });
+        if (!pathCheck.ok) return { ok: false, reason: pathCheck.reason };
+        return { ok: true };
+    }
+
+    if (tokenContainsUnsafePath(token)) {
+        return { ok: false, reason: `Command blocked: argument contains an unsafe path: ${token}` };
+    }
+    return { ok: true };
+}
+
+function validateCommandSpecificRules(base, args) {
+    if (base === 'node') {
+        const forbidden = new Set(['-e', '--eval', '-p', '--print', '--input-type']);
+        const hasEval = args.some(arg => forbidden.has(arg) || arg.startsWith('--eval=') || arg.startsWith('--print='));
+        if (hasEval) return { ok: false, reason: 'Command blocked: node eval/print modes are not allowed' };
+    }
+
+    if (base === 'find') {
+        const forbidden = new Set(['-exec', '-execdir', '-delete', '-ok', '-okdir']);
+        if (args.some(arg => forbidden.has(arg))) {
+            return { ok: false, reason: 'Command blocked: dangerous find action is not allowed' };
         }
     }
-    return false;
-}
 
-// Sanitize input - remove dangerous characters
-function sanitizeInput(input) {
-    return input //TODO
-}
-
-export function bash(command, options = {}) {
-    // Sanitize input first
-    const sanitizedCommand = sanitizeInput(command);
-
-    // Check for blocked commands
-    const blockCheck = isCommandBlocked(sanitizedCommand);
-    if (blockCheck.blocked) {
-        console.error(chalk.red(`\n🔒 Security: Command blocked - contains dangerous pattern '${blockCheck.pattern}'`));
-        return Promise.reject(
-            new Error(`Command blocked: contains dangerous pattern '${blockCheck.pattern}'`)
-        );
+    if (base === 'git') {
+        const forbidden = ['push', 'reset', 'clean', 'rebase', 'filter-branch'];
+        if (args.some(arg => forbidden.includes(arg))) {
+            return { ok: false, reason: `Command blocked: git ${args.find(arg => forbidden.includes(arg))} is not allowed` };
+        }
     }
 
-    // Check for destructive commands and warn
-    if (isDestructive(sanitizedCommand)) {
-        console.warn(chalk.yellow(`\n⚠️  Warning: Potentially destructive command detected`));
+    if (base === 'npm') {
+        const allowedNpm = new Set(['test', '--version', '-v', 'version', 'list', 'ls', 'view', 'audit']);
+        const subcommand = args.find(arg => !arg.startsWith('-'));
+        if (subcommand && !allowedNpm.has(subcommand)) {
+            return { ok: false, reason: `Command blocked: npm ${subcommand} is not allowed` };
+        }
     }
 
-    // Execute the command
-    return new Promise((resolve, reject) => {
-        exec(sanitizedCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-            resolve({ stdout: redact(stdout), stderr: redact(stderr) });
-        });
+    return { ok: true };
+}
+
+function validateCommand(command) {
+    if (typeof command !== 'string' || command.trim() === '') {
+        return { ok: false, reason: 'Command must be a non-empty string' };
+    }
+
+    const block = isCommandBlocked(command);
+    if (block.blocked) return { ok: false, reason: `Command blocked: contains dangerous pattern '${block.pattern}'` };
+    if (SHELL_METACHARS.test(command)) return { ok: false, reason: 'Command blocked: shell operators/redirection are not allowed' };
+
+    const parsed = tokenize(command);
+    if (!parsed.ok) return parsed;
+
+    const tokens = parsed.tokens;
+    if (tokens.length === 0) return { ok: false, reason: 'Command must be a non-empty string' };
+
+    const [base, ...args] = tokens;
+    if (base.includes('/') || base.includes('\\') || base.startsWith('.')) {
+        return { ok: false, reason: 'Command blocked: executable path is not allowed' };
+    }
+    if (!ALLOWED_COMMANDS.has(base)) return { ok: false, reason: `Command not on allowlist: ${base}` };
+
+    const commandRules = validateCommandSpecificRules(base, args);
+    if (!commandRules.ok) return commandRules;
+
+    for (const token of args) {
+        if (token === '.' || token === './') continue;
+        const pathValidation = validateWorkspacePathToken(token);
+        if (!pathValidation.ok) return pathValidation;
+    }
+
+    return { ok: true, tokens };
+}
+
+export async function safeBashApproval(command) {
+    const validation = validateCommand(command);
+    if (!validation.ok) return { approved: false, reason: validation.reason };
+
+    const base = validation.tokens[0];
+    const isSafeGit = command.startsWith('git status') || command.startsWith('git log') || command.startsWith('git diff');
+    const autoSafe = AUTO_SAFE_COMMANDS.has(base) || isSafeGit;
+    if (autoSafe && !isDestructive(command)) {
+        return { approved: true, reason: `Auto-approved safe command: ${command.trim()}` };
+    }
+
+    console.log(chalk.yellow(`\n⚠️ The AI wants to execute a terminal command:`));
+    console.log(chalk.cyan(`   $ ${command.trim()}`));
+    if (isDestructive(command)) console.log(chalk.yellow('   (Potentially destructive command)'));
+
+    const answer = await askQuestion(chalk.yellow('Do you want to allow this command to run? [Y/n]: '));
+    if (answer === null || answer.trim().toLowerCase().startsWith('n')) {
+        return { approved: false, reason: 'Command execution denied by user.' };
+    }
+    return { approved: true, reason: 'Command execution granted by user.' };
+}
+
+const SENSITIVE_ENV_KEYS = /(^|_)(KEY|TOKEN|SECRET|PASSWORD|PASS|CREDENTIAL|AUTH|COOKIE)(_|$)/i;
+
+function getSafeEnvironment() {
+    return Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => !SENSITIVE_ENV_KEYS.test(key))
+    );
+}
+
+export async function bash(command, options = {}) {
+    const validation = validateCommand(command);
+    if (!validation.ok) throw new Error(validation.reason);
+
+    const [file, ...args] = validation.tokens;
+    const { stdout, stderr } = await execFileAsync(file, args, {
+        cwd: process.cwd(),
+        env: getSafeEnvironment(),
+        timeout: options.timeout ?? 30000,
+        maxBuffer: options.maxBuffer ?? 1024 * 1024 * 10,
+        shell: false,
     });
+    return { stdout: redact(stdout), stderr: redact(stderr) };
 }
 
-// Export lists for external access
-export { BLOCKED_COMMANDS, DESTRUCTIVE_COMMANDS };
+export { BLOCKED_COMMANDS, DESTRUCTIVE_COMMANDS, validateCommand };

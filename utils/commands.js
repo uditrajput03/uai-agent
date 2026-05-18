@@ -94,8 +94,8 @@ export async function exportConversation(msgArray, provider, model, __dirname) {
             if (msg.tool_calls && msg.tool_calls.length > 0) {
                 markdown += `**⚡ Tool Calls:**\n\n`;
                 for (const toolCall of msg.tool_calls) {
-                    markdown += `- **Tool:** \`${toolCall.function.name}\`\n`;
-                    markdown += `  **Arguments:** \`\`\`json\n${toolCall.function.arguments}\n\`\`\`\n`;
+                    markdown += `- **Tool:** \`${toolCall.function?.name || 'unknown'}\`\n`;
+                    markdown += `  **Arguments:** \`\`\`json\n${toolCall.function?.arguments || ''}\n\`\`\`\n`;
                 }
                 markdown += `\n`;
             }
@@ -109,12 +109,12 @@ export async function exportConversation(msgArray, provider, model, __dirname) {
 
     const defaultFilename = `chat-export-${timestamp}.md`;
     const filenameInput = await askQuestion(chalk.yellow(`Enter filename (default: ${defaultFilename}): `));
-    const filename = filenameInput?.trim() || defaultFilename;
-
-    const finalFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+    const rawFilename = filenameInput?.trim() || defaultFilename;
+    const safeBaseName = path.basename(rawFilename).replace(/[\\/]/g, '') || defaultFilename;
+    const finalFilename = safeBaseName.endsWith('.md') ? safeBaseName : `${safeBaseName}.md`;
 
     try {
-        const exportPath = path.resolve(__dirname, finalFilename);
+        const exportPath = path.join(__dirname, finalFilename);
         fs.writeFileSync(exportPath, markdown, 'utf-8');
         console.log(chalk.green(`✓ Chat history exported to: ${finalFilename}`));
     } catch (error) {

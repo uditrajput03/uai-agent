@@ -1,35 +1,38 @@
 import { keys } from "../config/keys.js";
 
+function escapeRegex(text) {
+    return String(text).replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+}
+
+function makeWholeTokenPattern(text, flags = 'gi') {
+    return new RegExp(`(?<![A-Za-z0-9_])${escapeRegex(text)}(?![A-Za-z0-9_])`, flags);
+}
+
 const REDACTION_PATTERNS = {
     // Email addresses
     email: {
         pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
         replacement: '[EMAIL_REDACTED]'
     },
-    // Phone numbers (various formats)
     username: {
-        pattern: process.env.USER ? new RegExp(`\\b${process.env.USER}\\b`, 'g') : null,
+        pattern: process.env.USER ? makeWholeTokenPattern(process.env.USER, 'g') : null,
         replacement: '[NAME_REDACTED]'
     }
 };
 
 let customPatterns = [];
-let wordBoundaryPatterns = [];
 if (keys.REDACTION_PATTERN) {
     try {
-        const parsed = keys.REDACTION_PATTERN
+        const parsed = keys.REDACTION_PATTERN;
         if (Array.isArray(parsed)) {
             const validStrings = parsed.filter(p => typeof p === 'string' && p.length > 0);
-            const validRegexes = parsed.filter(p => typeof p === 'object' && p instanceof RegExp);
-            customPatterns = validStrings.map(p => new RegExp(p, 'gi'));
-            customPatterns = [...customPatterns, ...validRegexes];
+            const validRegexes = parsed.filter(p => p instanceof RegExp);
 
-            wordBoundaryPatterns = validStrings
-                .filter(p => !(p.startsWith('\\b') && p.endsWith('\\b')))
-                .map(p => new RegExp(`\\b${p}\\b`, 'gi'));
-            customPatterns = [...wordBoundaryPatterns, ...customPatterns];
+            customPatterns = [
+                ...validStrings.map(p => makeWholeTokenPattern(p, 'gi')),
+                ...validRegexes
+            ];
         }
-
     } catch (error) {
         // Fallback: treat as comma-separated if not valid JSON
         if (typeof keys.REDACTION_PATTERN === 'string') {
@@ -37,7 +40,7 @@ if (keys.REDACTION_PATTERN) {
                 .split(',')
                 .map(p => p.trim())
                 .filter(p => p.length > 0)
-                .map(p => new RegExp(p, 'gi'));
+                .map(p => makeWholeTokenPattern(p, 'gi'));
         }
     }
 }

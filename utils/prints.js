@@ -61,7 +61,7 @@ export function printToolResponse(toolResponse, toolCalls) {
             // Clean up the arguments for display
             try {
                 const parsedArgs = JSON.parse(args);
-                if ((toolName === 'write' || toolName === 'edit') && parsedArgs.filePath) {
+                if ((toolName === 'write' || toolName === 'edit') && parsedArgs?.filePath) {
                     args = { filePath: parsedArgs.filePath };
                 } // Only show file path for read/write/edit tools
                 else {

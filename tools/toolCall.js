@@ -89,7 +89,7 @@ toolHandlers.set('edit', async (input) => {
 
 function parseToolInput(call) {
     try {
-        const input = call.function.arguments
+        const input = call.function?.arguments
             ? JSON.parse(call.function.arguments)
             : {};
         return { ok: true, input };
@@ -99,12 +99,13 @@ function parseToolInput(call) {
 }
 
 async function executeSingleTool(call) {
-    const toolName = call.function.name;
+    const toolName = call.function?.name;
+    const toolCallId = call.id || `missing_tool_call_id_${Date.now()}`;
 
     // ── Parse input ──
     const { ok, input, error } = parseToolInput(call);
     if (!ok) {
-        return { role: 'tool', tool_call_id: call.id, content: error };
+        return { role: 'tool', tool_call_id: toolCallId, content: error };
     }
 
     // ── Debug logging ──
@@ -119,8 +120,8 @@ async function executeSingleTool(call) {
         console.log(`Unknown tool requested: ${toolName}`);
         return {
             role: 'tool',
-            tool_call_id: call.id,
-            content: `Unknown tool or tool call input: ${toolName}`
+            tool_call_id: toolCallId,
+            content: `Unknown tool or tool call input: ${toolName || 'unknown'}`
         };
     }
 
@@ -129,7 +130,7 @@ async function executeSingleTool(call) {
     // ── Redact & return ──
     return {
         role: 'tool',
-        tool_call_id: call.id,
+        tool_call_id: toolCallId,
         content: redact(output)
     };
 }
