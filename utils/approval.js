@@ -17,9 +17,12 @@ export async function getApprovalRequirements(toolCalls) {
     }
 
     if (mode === 'manual') {
+        // In manual mode, prompt only for tools explicitly configured to require it.
+        // promptExecution: true  → ask before running
+        // promptSending:   true  → ask before sending result to AI
         return {
-            execApproval: toolCalls.some(call => autoApprove[call.function.name]?.execution === false),
-            sendingApproval: toolCalls.some(call => autoApprove[call.function.name]?.sending === false)
+            execApproval: toolCalls.some(call => autoApprove[call.function.name]?.promptExecution === true),
+            sendingApproval: toolCalls.some(call => autoApprove[call.function.name]?.promptSending === true)
         };
     }
     if (mode === 'auto') { //block bash command

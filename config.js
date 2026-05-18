@@ -66,22 +66,48 @@ export const models = {
     }
 };
 
+/**
+ * AUTO-APPROVAL CONFIGURATION
+ * ===========================
+ *
+ * Modes (set via `default`):
+ *   'auto'   — Safe tools (read, write, edit) auto-execute without prompting.
+ *              Bash commands always require execution approval.
+ *              Sending tool responses back to the AI requires approval only
+ *              when the tool was bash or touched an out-of-bounds path.
+ *              (per-tool settings below are IGNORED in this mode)
+ *
+ *   'manual' — Uses the per-tool settings below to decide what to prompt for.
+ *              promptExecution: true  → ask before running the tool
+ *              promptExecution: false → run without asking
+ *              promptSending:   true  → ask before sending the result to the AI
+ *              promptSending:   false → send result without asking
+ *
+ *   'block'  — Blocks ALL tool calls (no execution, no sending).
+ *
+ *   'allow'  — (UNSAFE) Approves ALL tool calls automatically — execution AND
+ *              sending. Use with extreme caution.
+ *
+ * Per-tool settings (ONLY used when default = 'manual'):
+ *   promptExecution — whether to ask the user before executing this tool
+ *   promptSending   — whether to ask the user before sending the result to the AI
+ */
 export const autoApprove = {
-    default: 'auto', // auto - prompt when unsafe, manual - It uses user given settings, block - It block all tool calls, allow (unsafe) - It approve all tool calls
+    default: 'auto',
     bash: {
-        execution: false,
-        sending: false,
+        promptExecution: true,   // always ask before running shell commands
+        promptSending: true,     // always ask before sending shell output back
     },
     read: {
-        execution: true,
-        sending: false,
+        promptExecution: false,  // reading is safe, no need to prompt
+        promptSending: true,     // but confirm before sending file contents to AI
     },
     write: {
-        execution: false,
-        sending: true,
+        promptExecution: true,   // ask before writing files
+        promptSending: false,    // writing is quick, auto-send the result
     },
     edit: {
-        execution: false,
-        sending: true,
+        promptExecution: true,   // ask before editing files
+        promptSending: false,    // editing is quick, auto-send the result
     },
 };
