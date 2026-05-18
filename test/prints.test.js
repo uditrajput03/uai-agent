@@ -214,5 +214,24 @@ describe('prints', () => {
             printToolResponse(toolResponse, []);
             assert.ok(mockConsoleLog.mock.callCount() > 0);
         });
+
+        it('should not expose write content even with invalid-looking extra fields', () => {
+            const toolCalls = [{
+                function: {
+                    name: 'write',
+                    arguments: JSON.stringify({ filePath: './safe.txt', content: 'DO_NOT_PRINT', nested: { token: 'SECRET' } })
+                }
+            }];
+            printToolResponse('written', toolCalls);
+            const output = mockConsoleLog.mock.calls.map(c => c.arguments.join(' ')).join(' ');
+            assert.ok(output.includes('./safe.txt'));
+            assert.ok(!output.includes('DO_NOT_PRINT'));
+            assert.ok(!output.includes('SECRET'));
+        });
+
+        it('should handle tool call arguments that parse to null', () => {
+            const toolCalls = [{ function: { name: 'read', arguments: 'null' } }];
+            assert.doesNotThrow(() => printToolResponse('output', toolCalls));
+        });
     });
 });

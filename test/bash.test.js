@@ -1,156 +1,178 @@
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { bash, safeBashApproval, BLOCKED_COMMANDS, DESTRUCTIVE_COMMANDS } from '../tools/bash.js';
-import * as askQuestionModule from '../utils/askQuestion.js';
 import fs from 'fs';
 import path from 'path';
+import { bash, safeBashApproval, validateCommand, BLOCKED_COMMANDS, DESTRUCTIVE_COMMANDS } from '../tools/bash.js';
 
-describe('bash', () => {
-    describe('bash - execution', () => {
-        it('should execute a simple safe command and return stdout', async () => {
-            const result = await bash('echo hello');
-            assert.ok(result.stdout.includes('hello'));
-        });
+function assertInvalid(command, pattern) {
+    const result = validateCommand(command);
+    assert.strictEqual(result.ok, false, `${command} should be invalid`);
+    if (pattern) assert.match(result.reason, pattern);
+}
 
-        it('should return stderr for commands that produce stderr', async () => {
-            try {
-                await bash('ls /nonexistent_directory_xyz');
-                assert.fail('Should have thrown');
-            } catch (error) {
-                assert.ok(error);
-            }
-        });
+function assertValid(command) {
+    const result = validateCommand(command);
+    assert.strictEqual(result.ok, true, `${command} should be valid: ${result.reason}`);
+    return result;
+}
 
-        it('should execute commands with arguments', async () => {
-            const result = await bash('echo "hello world"');
-            assert.ok(result.stdout.includes('hello world'));
-        });
+describe('bash security and execution', () => {
+    const testDir = path.join('test', '_temp_bash');
+    let originalCwd;
 
-        it('should handle commands producing large output', async () => {
-            const result = await bash('seq 1 1000');
-            const lines = result.stdout.trim().split('\n');
-            assert.strictEqual(lines.length, 1000);
-        });
-
-        it('should handle commands with exit code 0', async () => {
-            const result = await bash('true');
-            assert.ok(result);
-        });
-
-        it('should reject blocked commands containing rm -rf /', async () => {
-            await assert.rejects(
-                async () => await bash('rm -rf /'),
-                /Command blocked/
-            );
-        });
-
-        it('should reject blocked commands containing shutdown', async () => {
-            await assert.rejects(
-                async () => await bash('shutdown now'),
-                /Command blocked/
-            );
-        });
-
-        it('should reject blocked commands containing cat /etc/shadow', async () => {
-            await assert.rejects(
-                async () => await bash('cat /etc/shadow'),
-                /Command blocked/
-            );
-        });
-
-        it('should reject blocked commands containing cat /etc/passwd', async () => {
-            await assert.rejects(
-                async () => await bash('cat /etc/passwd'),
-                /Command blocked/
-            );
-        });
-
-        it('should reject fork bomb pattern', async () => {
-            await assert.rejects(
-                async () => await bash(':(){:|:&};:'),
-                /Command blocked/
-            );
-        });
-
-        it('should reject dd if= pattern', async () => {
-            await assert.rejects(
-                async () => await bash('dd if=/dev/zero of=/dev/sda'),
-                /Command blocked/
-            );
-        });
-
-        it('should handle case-insensitive blocked commands', async () => {
-            await assert.rejects(
-                async () => await bash('SHUTDOWN now'),
-                /Command blocked/
-            );
-        });
-
-        it('should handle commands with pipes (not blocked by isCommandBlocked)', async () => {
-            const result = await bash('echo hello | cat');
-            assert.ok(result.stdout.includes('hello'));
-        });
-
-        it('should return redacted output', async () => {
-            const result = await bash('echo test@test.com');
-            assert.ok(!result.stdout.includes('test@test.com'));
-            assert.ok(result.stdout.includes('[EMAIL_REDACTED]'));
-        });
-
-        it('should handle empty command', async () => {
-            try {
-                await bash('');
-                assert.fail('Should have thrown for empty command');
-            } catch (error) {
-                assert.ok(error);
-            }
-        });
-
-        it('should handle command with only whitespace', async () => {
-            try {
-                await bash('   ');
-                assert.fail('Should have thrown');
-            } catch (error) {
-                assert.ok(error);
-            }
-        });
-
-        it('should handle multiline commands', async () => {
-            const result = await bash('echo line1\necho line2');
-            assert.ok(result.stdout.includes('line1'));
-        });
-
-        it('should execute pwd and return current directory', async () => {
-            const result = await bash('pwd');
-            assert.ok(result.stdout.trim().length > 0);
-        });
-
-        it('should handle command that produces no output', async () => {
-            const result = await bash('true');
-            assert.strictEqual(result.stdout, '');
-            assert.strictEqual(result.stderr, '');
-        });
+    beforeEach(() => {
+        fs.rmSync(testDir, { recursive: true, force: true });
+        fs.mkdirSync(testDir, { recursive: true });
+        originalCwd = process.cwd();
+        process.chdir(testDir);
+        global.__MOCK_ASK_ANSWER = 'y';
     });
 
-    describe('BLOCKED_COMMANDS and DESTRUCTIVE_COMMANDS exports', () => {
-        it('should export BLOCKED_COMMANDS as an array', () => {
-            assert.ok(Array.isArray(BLOCKED_COMMANDS));
-            assert.ok(BLOCKED_COMMANDS.length > 0);
-        });
+    afterEach(() => {
+        process.chdir(originalCwd);
+        fs.rmSync(testDir, { recursive: true, force: true });
+        delete global.__MOCK_ASK_ANSWER;
+    });
 
-        it('should export DESTRUCTIVE_COMMANDS as an array', () => {
-            assert.ok(Array.isArray(DESTRUCTIVE_COMMANDS));
-            assert.ok(DESTRUCTIVE_COMMANDS.length > 0);
-        });
+    it('executes simple allowlisted commands without a shell', async () => {
+        const result = await bash('echo hello');
+        assert.match(result.stdout, /hello/);
+    });
 
-        it('should contain known dangerous patterns in BLOCKED_COMMANDS', () => {
-            assert.ok(BLOCKED_COMMANDS.includes('rm -rf /'));
-            assert.ok(BLOCKED_COMMANDS.includes('shutdown'));
-        });
+    it('supports quoted arguments and preserves spaces', async () => {
+        const validation = assertValid('echo "hello world"');
+        assert.deepStrictEqual(validation.tokens, ['echo', 'hello world']);
+        const result = await bash('echo "hello world"');
+        assert.match(result.stdout, /hello world/);
+    });
 
-        it('should contain known destructive patterns in DESTRUCTIVE_COMMANDS', () => {
-            assert.ok(DESTRUCTIVE_COMMANDS.includes('rm -rf'));
-            assert.ok(DESTRUCTIVE_COMMANDS.includes('git push --force'));
-        });
+    it('supports escaped spaces', () => {
+        const validation = assertValid('echo hello\\ world');
+        assert.deepStrictEqual(validation.tokens, ['echo', 'hello world']);
+    });
+
+    it('rejects empty commands and malformed quoting', async () => {
+        await assert.rejects(() => bash('   '), /non-empty/);
+        assertInvalid('echo "unterminated', /unterminated quote/);
+    });
+
+    it('rejects blocked dangerous patterns case-insensitively', async () => {
+        await assert.rejects(() => bash('rm -rf /'), /Command blocked/);
+        await assert.rejects(() => bash('SHUTDOWN now'), /Command blocked/);
+        await assert.rejects(() => bash('cat /etc/shadow'), /Command blocked/);
+        await assert.rejects(() => bash(':(){:|:&};:'), /Command blocked|shell operators/);
+        await assert.rejects(() => bash('dd if=/dev/zero of=file'), /Command blocked/);
+    });
+
+    it('rejects shell operators, redirects, substitution, and multiline commands', async () => {
+        const commands = [
+            'echo hello | cat',
+            'echo one; echo two',
+            'echo ok && echo no',
+            'echo ok || echo no',
+            'echo $(pwd)',
+            'echo `pwd`',
+            'echo hi > out.txt',
+            'cat < in.txt',
+            'echo line1\necho line2'
+        ];
+        for (const command of commands) {
+            await assert.rejects(() => bash(command), /shell operators/);
+        }
+    });
+
+    it('rejects commands outside the allowlist and executable paths', () => {
+        assertInvalid('curl example.com', /allowlist/);
+        assertInvalid('/bin/echo hello', /executable path|allowlist/);
+        assertInvalid('./script.sh', /executable path/);
+    });
+
+    it('allows workspace relative path arguments', async () => {
+        fs.writeFileSync('file.txt', 'workspace content');
+        assertValid('cat ./file.txt');
+        const result = await bash('cat ./file.txt');
+        assert.strictEqual(result.stdout, 'workspace content');
+    });
+
+    it('rejects absolute, parent traversal, home, and windows absolute path arguments', () => {
+        assertInvalid('cat /etc/passwd', /Command blocked|outside workspace/);
+        assertInvalid('cat ../secret.txt', /outside workspace/);
+        assertInvalid('cat ~/.ssh/id_rsa', /outside workspace|unsafe path/);
+        assertInvalid('cat C:/Windows/win.ini', /outside workspace|unsafe path/);
+    });
+
+    it('rejects embedded unsafe paths in option values and snippets', () => {
+        assertInvalid('grep secret --include=/etc/passwd', /unsafe path/);
+        assertInvalid('node script.js --config=../secret.json', /unsafe path/);
+        assertInvalid('echo prefix/../../secret', /unsafe path/);
+    });
+
+    it('rejects dangerous find actions even without shell operators', () => {
+        assertInvalid('find . -exec echo {}', /dangerous find|dangerous pattern/);
+        assertInvalid('find . -delete', /dangerous find/);
+        assertInvalid('find . -execdir echo {}', /dangerous find|dangerous pattern/);
+    });
+
+    it('rejects node inline code execution modes', () => {
+        assertInvalid('node -e "console.log(1)"', /node eval/);
+        assertInvalid('node --eval=console.log(1)', /node eval|dangerous pattern/);
+        assertInvalid('node -p process.cwd()', /node eval/);
+    });
+
+    it('rejects dangerous git operations and allows read-only git commands', async () => {
+        assertInvalid('git push origin main', /git push/);
+        assertInvalid('git reset --hard', /Command blocked|git reset/);
+        assertInvalid('git clean -fd', /git clean/);
+        assertValid('git status');
+        const approval = await safeBashApproval('git status');
+        assert.strictEqual(approval.approved, true);
+    });
+
+    it('restricts npm to low-risk subcommands', () => {
+        assertValid('npm test');
+        assertValid('npm --version');
+        assertInvalid('npm install left-pad', /npm install/);
+        assertInvalid('npm run build', /npm run/);
+    });
+
+    it('auto-approves safe read-only commands', async () => {
+        const approval = await safeBashApproval('echo hello');
+        assert.strictEqual(approval.approved, true);
+    });
+
+    it('denies invalid commands before prompting', async () => {
+        global.__MOCK_ASK_ANSWER = 'y';
+        const approval = await safeBashApproval('rm -rf /');
+        assert.strictEqual(approval.approved, false);
+        assert.match(approval.reason, /Command blocked/);
+    });
+
+    it('prompts for non-auto-safe allowlisted commands and respects denial', async () => {
+        global.__MOCK_ASK_ANSWER = 'n';
+        const approval = await safeBashApproval('npm test');
+        assert.strictEqual(approval.approved, false);
+        assert.match(approval.reason, /denied/);
+    });
+
+    it('returns stderr/stdout from executed commands and propagates failures', async () => {
+        const ok = await bash('true');
+        assert.strictEqual(ok.stdout, '');
+        assert.strictEqual(ok.stderr, '');
+        await assert.rejects(() => bash('false'));
+    });
+
+    it('does not pass sensitive environment variables to child commands', async () => {
+        process.env.SECRET_TOKEN = 'super-secret-value';
+        fs.writeFileSync('env-check.js', "if (!process.env.SECRET_TOKEN) { throw new Error('SECRET_TOKEN missing'); }\nconsole.log(process.env.SECRET_TOKEN);");
+        try {
+            await assert.rejects(() => bash('node ./env-check.js'), /SECRET_TOKEN missing/);
+        } finally {
+            delete process.env.SECRET_TOKEN;
+        }
+    });
+
+    it('exports security pattern lists', () => {
+        assert.ok(BLOCKED_COMMANDS.includes('rm -rf /'));
+        assert.ok(DESTRUCTIVE_COMMANDS.includes('git push --force'));
     });
 });

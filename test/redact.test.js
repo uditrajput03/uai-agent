@@ -75,11 +75,8 @@ describe('redact', () => {
         it('should handle username with word boundaries', () => {
             const username = process.env.USER;
             if (username) {
-                // Should not redact partial matches
                 const result = redact(`${username}extended`);
-                // Word boundary should prevent matching if followed by more word chars
-                // Actually \b matches at the boundary between word and non-word chars
-                // so "username" in "usernameextended" would not match since there's no boundary
+                assert.ok(result.includes(`${username}extended`));
             }
         });
     });
@@ -154,6 +151,15 @@ describe('redact', () => {
         it('should handle boolean input', () => {
             assert.strictEqual(redact(true), true);
             assert.strictEqual(redact(false), false);
+        });
+
+        it('should leave already-redacted placeholders unchanged', () => {
+            assert.strictEqual(redact('[EMAIL_REDACTED] [NAME_REDACTED]'), '[EMAIL_REDACTED] [NAME_REDACTED]');
+        });
+
+        it('should not redact malformed emails', () => {
+            const text = 'not-an-email@ and @example.com and user@localhost';
+            assert.strictEqual(redact(text), text);
         });
 
         it('should handle object input', () => {

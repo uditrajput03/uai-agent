@@ -236,4 +236,23 @@ describe('commands - exportConversation', () => {
         const files = fs.readdirSync(testDir);
         assert.ok(files.includes('myexport.md'));
     });
+
+    it('should sanitize traversal in export filename', async () => {
+        msgArray.push({ role: 'user', content: 'Hello' });
+        msgArray.push({ role: 'assistant', content: 'Hi!' });
+
+        global.__MOCK_ASK_ANSWER = '../evil';
+        await exportConversation(msgArray, 'test', 'model', testDir);
+
+        assert.ok(fs.existsSync(path.join(testDir, 'evil.md')));
+        assert.strictEqual(fs.existsSync(path.join('test', 'evil.md')), false);
+    });
+
+    it('should export assistant tool calls with missing function data safely', async () => {
+        msgArray.push({ role: 'user', content: 'do tool' });
+        msgArray.push({ role: 'assistant', content: null, tool_calls: [{ id: '1' }] });
+
+        global.__MOCK_ASK_ANSWER = 'missing-function.md';
+        await assert.doesNotReject(() => exportConversation(msgArray, 'test', 'model', testDir));
+    });
 });
