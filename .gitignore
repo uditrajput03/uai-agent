@@ -38,7 +38,5 @@ temp/
 
 # Test files
 test.js
-*.test.js
-test/
-tests/
+# *.test.js
 config/keys.js

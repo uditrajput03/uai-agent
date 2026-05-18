@@ -41,10 +41,14 @@ export const models = {
             extra_body: { "enable_thinking": true }
         },
         qwenmax: {
-            model: "qwen3-max",
+            model: "qwen3-max-2026-01-23",
             extra_body: { "enable_thinking": true }
         },
         qwenplus: {
+            model: "qwen3.6-plus",
+            extra_body: { "enable_thinking": true }
+        },
+        qwenplusold: {
             model: "qwen3.5-plus-2026-02-15",
             extra_body: { "enable_thinking": true }
         },

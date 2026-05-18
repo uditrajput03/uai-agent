@@ -19,6 +19,9 @@ function getReadline() {
 }
 
 export async function askQuestion(inputText) {
+    if (process.env.NODE_ENV === 'test') {
+        return global.__MOCK_ASK_ANSWER !== undefined ? global.__MOCK_ASK_ANSWER : 'y';
+    }
     const rlInstance = getReadline();
     try {
         return await rlInstance.question(inputText);

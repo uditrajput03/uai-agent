@@ -1,18 +1,26 @@
 {
   "name": "uai-agent",
   "version": "1.0.0",
-  "description": "",
+  "description": "Secure AI agent for safe file operations and shell commands",
   "main": "index.js",
   "type": "module",
   "bin": {
     "uai": "./index.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_ENV=test node --test test/**/*.test.js",
+    "test:watch": "NODE_ENV=test node --test --watch test/**/*.test.js"
   },
-  "keywords": [],
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "automation",
+    "security",
+    "tool-calling"
+  ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@inquirer/prompts": "^8.4.3",
     "chalk": "^5.6.2",
