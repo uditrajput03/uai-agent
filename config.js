@@ -40,8 +40,16 @@ export const models = {
             model: "qwen3.6-max-preview",
             extra_body: { "enable_thinking": true }
         },
+        qwenmax: {
+            model: "qwen3-max",
+            extra_body: { "enable_thinking": true }
+        },
         qwenplus: {
             model: "qwen3.5-plus-2026-02-15",
+            extra_body: { "enable_thinking": true }
+        },
+        qwencode: {
+            model: "qwen3.5-397b-a17b",
             extra_body: { "enable_thinking": true }
         },
         qwen35: {

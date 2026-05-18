@@ -1,16 +1,30 @@
 # uai-agent
 
-A secure, CLI-based AI agent framework that leverages tool calling to execute shell commands and file operations safely. Built with a security-first architecture, it features intelligent command interpretation, multi-provider model support, and automatic PII redaction.
+A secure, intelligent CLI agent that safely executes AI-driven file operations and shell commands with explicit user control. Built for developers who need automation with strong safety guarantees.
 
 ## ✨ Features
 
-- **🔒 Security-First Execution**: Blocks dangerous commands (`rm -rf /`, `shutdown`, etc.) and sanitizes inputs
-- **🛠️ Extensible Tool System**: AI-driven tool calling for `bash`, `read`, and `write` operations
-- **🤖 Multi-Provider Support**: Easily switch between OpenAI-compatible providers (Alibaba, Nvidia, Cloudflare)
-- **🔍 Sensitive Data Redaction**: Automatically scrubs emails, usernames, and PII from all outputs
-- **💬 Interactive CLI**: Real-time streaming responses, conversation history management, and graceful signal handling
-- **✅ Explicit Confirmation**: Every tool call requires manual user approval before execution
-- **📝 Comprehensive Logging**: Debug mode and clear execution feedback for auditability
+- **🔐 Strict Security Model**:  
+  - Blocks dangerous commands (`rm -rf /`, `shutdown`, `cat /etc/shadow`, etc.)  
+  - Enforces working-directory-only access by default  
+  - Respects `.gitignore` to avoid sensitive files (configurable)
+- **🛠️ Four Core Tools**:  
+  - `read`: Safely read files  
+  - `write`: Create or overwrite files  
+  - `edit`: Replace exact text snippets in files  
+  - `bash`: Execute shell commands with approval
+- **🧠 Smart Approval System**:  
+  - **Auto mode (default)**: Safe file reads auto-execute; bash & writes require confirmation  
+  - **Manual mode**: Per-tool execution/sending prompts  
+  - **Block/Allow modes**: For testing or extreme caution
+- **💬 Enhanced CLI Experience**:  
+  - Real-time streaming responses with optional reasoning output  
+  - Context-aware commands (`@./file.txt` or `@workspace` in messages)  
+  - Conversation management: `/clear`, `/rewind`, `/export`
+- **🤖 Multi-Provider Ready**:  
+  Supports Alibaba, NVIDIA, Cloudflare, and Z.AI with 10+ model options
+- **🧼 Automatic Redaction**:  
+  Scrubs emails, usernames, and PII from all outputs
 
 ## 📦 Installation
 
@@ -20,120 +34,125 @@ npm install
 
 ## ⚙️ Configuration
 
-### 1. Environment Variables
-Create a `.env` file in the root directory:
+### 1. Environment Setup
+Create a `.env` file:
 ```env
-# Provider API Keys
-ALIBABA_API_KEY=your_key_here
-NVIDIA_API_KEY=your_key_here
-WORKER_AI=account_id:api_key
+# Required: Choose one or more providers
+ALIBABA_API_KEY=your_key
+NVIDIA_API_KEY=your_key
+WORKER_AI=account_id:api_token
+ZAI=your_zai_key
 
-# Optional: Enable verbose logging
+# Optional settings
 DEBUG=false
+showThinking=false
+gitIgnoreUnsafePaths=true  # Block .gitignore-matched paths by default
 ```
 
-### 2. Select Model & Provider
-Edit the provider/model constants at the top of `index.js`:
-```javascript
-const provider = 'alibaba'; // Options: 'alibaba', 'nvidia', 'cloudflare'
-const model = 'qwen';       // Options: 'qwen', 'kimi', 'minimax', 'glm'
+> 💡 **Note**: `config/keys.js` is gitignored—never commit API keys.
+
+### 2. Default Model Selection
+Set your preferred provider/model in `.env`:
+```env
+defaultProvider=alibaba
+defaultModel=qwen
 ```
+
+Or change interactively with `/model`.
 
 ## 🚀 Usage
 
 Start the agent:
 ```bash
 node index.js
+# or if globally linked:
+uai
 ```
 
-### CLI Commands
+### Basic Interaction
+- Type natural language requests (`List all JS files`)
+- Approve tool calls when prompted (`y/N`)
+- Use context tags in messages:
+  - `@./README.md` → auto-includes file content
+  - `@workspace` → adds `ls -la` output as context
+
+### Built-in Commands
 | Command | Description |
 |---------|-------------|
-| `help`  | Show available commands & usage info |
-| `clear` | Clear conversation history (keeps system prompt) |
-| `exit` / `quit` | Gracefully shutdown the agent |
-| `Ctrl+C` | Interrupt current operation or exit |
+| `/help` | Show this guide |
+| `/clear` | Reset conversation (keeps system prompt) |
+| `/rewind` | Undo last message + response |
+| `/export` | Save chat to Markdown file |
+| `/model` | Switch provider/model |
+| `/exit` | Quit gracefully |
+| `Ctrl+C` | Interrupt or exit |
 
-## 🧰 Tool Calling System
+## 🔒 Safety Architecture
 
-The agent uses a strict JSON format to request tool executions. All tool calls are intercepted, validated, and require explicit user confirmation (`y/N`) before running.
+### Path Restrictions
+- All file/tool operations are **sandboxed to the current directory** by default
+- Absolute paths (`/etc/passwd`) and parent traversal (`../secret`) trigger approval prompts
+- Files matching `.gitignore` patterns are blocked unless explicitly allowed
 
-### Available Tools
+### Command Protections
+**Always Blocked**:
+- System destruction: `rm -rf /`, `mkfs`, `dd if=/dev/zero`
+- Privilege escalation: `sudo`, `chmod 777 /etc/shadow`
+- Data exfiltration: `nc -e`, `/dev/tcp/`, `cat /etc/passwd`
 
-#### `bash`
-Executes shell commands with safety validation.
-```json
-{"tool": "bash", "input": {"command": "ls -la"}}
+**Require Confirmation**:
+- File deletion: `rm -rf node_modules`
+- Git history rewrite: `git push --force`
+- Docker/container operations
+
+### Approval Modes (`config.js`)
+```js
+autoApprove: {
+  default: 'auto', // Options: 'auto' | 'manual' | 'block' | 'allow'
+}
 ```
+- **`auto`**: Reads auto-run; bash/writes need approval
+- **`manual`**: Configure per-tool prompts
+- **`block`**: Rejects all tool calls
+- **`allow`**: ⚠️ Unsafe—bypasses all checks (for testing only)
 
-#### `read`
-Reads the contents of a file.
-```json
-{"tool": "read", "input": {"filePath": "./config.json"}}
-```
+## 🛠️ Customization
 
-#### `write`
-Writes content to a file.
-```json
-{"tool": "write", "input": {"filePath": "./output.txt", "content": "Hello World"}}
-```
+### Adding New Tools
+1. Create `tools/myTool.js` exporting an async function
+2. Register it in `toolHandlers` inside `tools/toolCall.js`
+3. Define its schema in `config/tools.js`
 
-## 🛡️ Security & Safety
+### Modifying Safety Rules
+- Adjust `BLOCKED_COMMANDS` in `tools/bash.js`
+- Tune path validation in `utils/approval.js`
+- Update system prompt in `config/SYSTEM.md`
 
-### Blocked Command Categories
-The agent actively blocks commands matching these patterns:
-- **File Destruction**: `rm -rf /`, `mkfs`, `dd if=/dev/zero`
-- **System Control**: `shutdown`, `reboot`, `halt`, `poweroff`
-- **Privilege Escalation**: `sudo`, `su -`, `chmod 777 /etc/shadow`
-- **Network/Exploits**: `nc -e`, `/dev/tcp/`, `eval`, `exec`
-- **Data/Config Wipes**: `crontab -r`, `iptables -F`, `cat /etc/shadow`
+## ⚠️ Critical Safety Notes
 
-### Protection Layers
-1. **Pattern Matching**: Commands are scanned against a blocklist before execution
-2. **Destructive Warnings**: Commands like `git reset --hard` or `docker rm` trigger explicit warnings
-3. **Output Redaction**: Emails and system usernames are automatically replaced with `[REDACTED]` tags
-4. **Manual Approval Gate**: No tool executes without explicit `y` confirmation from the user
-5. **Graceful Interruption**: `SIGINT`/`SIGTERM` handlers prevent orphaned processes
+1. **Never run as root** – The agent executes real system commands
+2. **Review every tool call** – Malicious prompts could request harmful actions
+3. **Audit `.gitignore`** – Ensure sensitive files are properly excluded
+4. **Use `DEBUG=true`** – Inspect raw AI payloads during development
 
 ## 📁 Project Structure
-
 ```
 uai-agent/
-├── index.js              # Main agent loop & CLI interface
-├── models.js             # AI provider & model configurations
-├── test.js               # Quick test script for tools
-├── tools/
-│   ├── bash.js           # Secure shell command executor
-│   ├── fsOps.js          # File read/write operations
-│   ├── toolCall.js       # Tool dispatcher & validator
-│   ├── askQuestion.js    # Readline prompt utility
-│   └── redact.js         # PII/sensitive data scrubber
+├── index.js              # Main agent loop
+├── config.js             # Model configs & approval rules
 ├── config/
-│   ├── SYSTEM.md         # Base system prompt for the AI
-│   └── TOOLS.md          # Tool definitions & JSON schema prompt
-├── .env                  # Environment variables (gitignored)
-├── package.json
-└── README.md
+│   ├── SYSTEM.md         # AI behavior instructions
+│   └── tools.js          # Tool schemas
+├── tools/
+│   ├── bash.js           # Secure command executor
+│   ├── fsOps.js          # File read/write/edit
+│   └── toolCall.js       # Tool dispatcher
+├── utils/
+│   ├── approval.js       # Path/command validation
+│   ├── commands.js       # CLI command handlers
+│   └── userAppend.js     # Context tag processor (@file)
+└── .env                  # API keys (gitignored)
 ```
 
-## 🔧 Adding Custom Tools
-
-1. Create a new file in `tools/` (e.g., `tools/myTool.js`)
-2. Export an async function that accepts an `input` object
-3. Register the tool name in `tools/toolCall.js`
-4. Document the tool schema in `config/TOOLS.md`
-
-## ⚠️ Safety Notice
-
-This agent executes **real shell commands** on your host system. While extensive protections are implemented:
-- Always review tool calls carefully before confirming
-- Never run the agent with `root`/`sudo` privileges
-- Audit `tools/bash.js` blocklists for your specific environment
-- Use `DEBUG=true` to inspect raw message payloads
-
 ## 📜 License
-
-MIT License. See `LICENSE` for details.
-
----
-Built for security, extensibility, and reliable AI-driven automation.
+MIT
