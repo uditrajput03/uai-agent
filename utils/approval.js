@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { askQuestion } from "./askQuestion.js";
 
-export function getApprovalRequirements(toolCalls) {
+export async function getApprovalRequirements(toolCalls) {
     let mode = autoApprove.default;
     if (mode === 'allow') {
         console.log(chalk.green('✓ Auto-approving all tool calls (allow mode).'));
@@ -16,10 +16,37 @@ export function getApprovalRequirements(toolCalls) {
         return { execApproval: true, sendingApproval: true };
     }
 
-    if (mode === 'auto') {
+    if (mode === 'manual') {
         return {
             execApproval: toolCalls.some(call => autoApprove[call.function.name]?.execution === false),
             sendingApproval: toolCalls.some(call => autoApprove[call.function.name]?.sending === false)
+        };
+    }
+    if (mode === 'auto') { //block bash command
+        const hasBash = toolCalls.some(call => call.function.name === 'bash');
+        let hasUnsafePath = false;
+
+        for (const call of toolCalls) {
+            try {
+                const input = JSON.parse(call.function.arguments || '{}');
+                const filePath = input.filePath;
+                if (filePath) {
+                    const approval = await safePathApproval(filePath, true);
+                    if (!approval.status) {
+                        console.log(approval);
+                        hasUnsafePath = true;
+                        break; // Short-circuit: stop checking further calls
+                    }
+                }
+            } catch (e) {
+                hasUnsafePath = true;
+                break; // Short-circuit on parse failure
+            }
+        }
+
+        return {
+            execApproval: hasBash,
+            sendingApproval: hasBash || hasUnsafePath,
         };
     }
 
@@ -28,7 +55,7 @@ export function getApprovalRequirements(toolCalls) {
     return { execApproval: false, sendingApproval: false };
 }
 
-export async function safePathApproval(filepath) {
+export async function safePathApproval(filepath, noPrompt = false) {
     const cwd = process.cwd();
     const resolvedPath = path.resolve(filepath);
     let toReturn = { status: false, reason: '' };
@@ -58,6 +85,11 @@ export async function safePathApproval(filepath) {
     console.log(chalk.yellow(`\n⚠️ The AI wants to access a file outside the working directory:`));
     console.log(chalk.yellow(`   Target: ${filepath}`));
 
+    if (noPrompt) {
+        toReturn.reason = `✗ Access denied (noPrompt=true) for out-of-bounds path: ${filepath}`;
+        console.log(chalk.red(toReturn.reason));
+        return toReturn;
+    }
     // Using [Y/n] convention (Capital Y means default is yes)
     const answer = await askQuestion(chalk.cyan('Do you want to allow this? [Y/n]: '));
 

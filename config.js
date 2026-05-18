@@ -67,7 +67,7 @@ export const models = {
 };
 
 export const autoApprove = {
-    default: 'auto', // auto - It use given settings, block - It block all tool calls, allow - It approve all tool calls
+    default: 'auto', // auto - prompt when unsafe, manual - It uses user given settings, block - It block all tool calls, allow (unsafe) - It approve all tool calls
     bash: {
         execution: false,
         sending: false,

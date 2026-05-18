@@ -204,7 +204,7 @@ async function main() {
     // Check for tool calls
     if (finalToolCalls && finalToolCalls.length > 0) {
         printToolCallInfo(finalToolCalls);
-        const { execApproval } = getApprovalRequirements(finalToolCalls);
+        const { execApproval } = await getApprovalRequirements(finalToolCalls);
         let confirmation;
         if (execApproval) {
             confirmation = await askQuestion(chalk.yellow('Execute this tool call? (y/N): '));
@@ -225,7 +225,7 @@ async function main() {
     }
     if (toolResponse) {
         printToolResponse(toolResponse, finalToolCalls);
-        const { sendingApproval } = getApprovalRequirements(finalToolCalls);
+        const { sendingApproval } = await getApprovalRequirements(finalToolCalls);
         let confirmation;
         if (sendingApproval) {
             confirmation = await askQuestion(chalk.yellow('Send this response to the agent? (Y/n): '));

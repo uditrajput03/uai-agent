@@ -121,7 +121,10 @@ export async function safeBashApproval(command) {
         toReturn.approved = false;
         return toReturn;
     }
-
+    else {
+        toReturn.approved = true;
+        toReturn.reason = `Command execution granted by user.`;
+    }
     console.log(chalk.green(`✓ Command execution granted.\n`));
     return toReturn;
 }

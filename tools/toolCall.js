@@ -1,4 +1,5 @@
 import { keys } from '../config/keys.js';
+import { autoApprove } from '../config.js';
 import { readFile, writeFile, editFile } from './fsOps.js';
 import { bash, safeBashApproval } from './bash.js';
 import { redact } from '../utils/redact.js';
@@ -19,9 +20,12 @@ toolHandlers.set('bash', async (input) => {
         return 'Error: command is required for bash tool';
     }
 
-    const approval = await safeBashApproval(input.command);
-    if (!approval.approved) {
-        return approval.reason;
+    // Skip approval check if autoApprove.default is set to 'allow'
+    if (autoApprove.default !== 'allow') {
+        const approval = await safeBashApproval(input.command);
+        if (!approval.approved) {
+            return approval.reason;
+        }
     }
 
     try {
@@ -38,9 +42,12 @@ toolHandlers.set('read', async (input) => {
         return 'Error: filePath is required for read tool';
     }
 
-    const approval = await safePathApproval(input.filePath);
-    if (!approval.status) {
-        return approval.reason;
+    // Skip approval check if autoApprove.default is set to 'allow'
+    if (autoApprove.default !== 'allow') {
+        const approval = await safePathApproval(input.filePath);
+        if (!approval.status) {
+            return approval.reason;
+        }
     }
 
     return readFile(input.filePath);
@@ -52,9 +59,12 @@ toolHandlers.set('write', async (input) => {
         return 'Error: filePath and content are required for write tool';
     }
 
-    const approval = await safePathApproval(input.filePath);
-    if (!approval.status) {
-        return approval.reason;
+    // Skip approval check if autoApprove.default is set to 'allow'
+    if (autoApprove.default !== 'allow') {
+        const approval = await safePathApproval(input.filePath);
+        if (!approval.status) {
+            return approval.reason;
+        }
     }
 
     return writeFile(input.filePath, input.content);
@@ -66,9 +76,12 @@ toolHandlers.set('edit', async (input) => {
         return 'Error: filePath, oldContent, and newContent are required for edit tool';
     }
 
-    const approval = await safePathApproval(input.filePath);
-    if (!approval.status) {
-        return approval.reason;
+    // Skip approval check if autoApprove.default is set to 'allow'
+    if (autoApprove.default !== 'allow') {
+        const approval = await safePathApproval(input.filePath);
+        if (!approval.status) {
+            return approval.reason;
+        }
     }
 
     return editFile(input.filePath, input.oldContent, input.newContent);
