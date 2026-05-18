@@ -30,7 +30,7 @@ toolHandlers.set('bash', async (input) => {
 
     try {
         const result = await bash(input.command);
-        return result.stdout || result.stderr;
+        return result.stdout || result.stderr || 'Command executed with no output';
     } catch (error) {
         return `Error executing bash command: ${error.message}`;
     }

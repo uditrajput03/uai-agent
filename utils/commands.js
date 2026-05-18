@@ -13,27 +13,55 @@ export function clearConversation(msgArray) {
 
 export function rewindConversation(msgArray) {
     let removedCount = 0;
-    let foundAssistant = false;
-    let foundUser = false;
+    let toolMessagesRemoved = 0;
 
     let initialLength = msgArray.length;
-    for (let i = initialLength - 1; i > 0; i--) {
-        if (!foundAssistant && msgArray[i].role === 'assistant') {
+
+    // Edge case: only system prompt remains
+    if (msgArray.length <= 1) {
+        console.log(chalk.yellow('⚠ Nothing to rewind (only system prompt remains).'));
+        console.log('');
+        return;
+    }
+
+    // Strategy: Work backwards to find and remove the last complete exchange
+    // A complete exchange is: user message → assistant response (possibly with tool calls)
+    // If there were tool calls, the pattern is: user → assistant(tool_calls) → tool → assistant(final)
+
+    let i = initialLength - 1;
+
+    // Step 1: Remove trailing tool messages and assistant messages until we find a user message
+    // We need to remove everything after the last user message
+    while (i > 0) {
+        const msg = msgArray[i];
+        
+        if (msg.role === 'tool') {
             msgArray.splice(i, 1);
-            foundAssistant = true;
+            toolMessagesRemoved++;
             removedCount++;
-        } else if (foundAssistant && !foundUser && msgArray[i].role === 'user') {
+            i--;
+        } else if (msg.role === 'assistant') {
             msgArray.splice(i, 1);
-            foundUser = true;
             removedCount++;
+            i--;
+        } else if (msg.role === 'user') {
+            // Found the last user message - remove it and stop
+            msgArray.splice(i, 1);
+            removedCount++;
+            break;
+        } else {
+            // Hit system message or something else, stop
             break;
         }
     }
 
-    if (foundUser && foundAssistant) {
-        console.log(chalk.green(`✓ Rewound ${initialLength - msgArray.length} message(s).`));
-    } else if (removedCount > 0) {
-        console.log(chalk.green('✓ Removed last message(s).'));
+    // Provide detailed feedback
+    if (removedCount > 0) {
+        let message = `✓ Rewound ${removedCount} message(s).`;
+        if (toolMessagesRemoved > 0) {
+            message += ` (including ${toolMessagesRemoved} tool response${toolMessagesRemoved > 1 ? 's' : ''})`;
+        }
+        console.log(chalk.green(message));
     } else {
         console.log(chalk.yellow('⚠ Nothing to rewind.'));
     }
@@ -186,6 +214,11 @@ export async function handleCommand(trimmedInput, context) {
     const commandKey = trimmedInput.startsWith('/') ? trimmedInput.slice(1) : trimmedInput;
 
     if (!commands[commandKey]) {
+        if (trimmedInput.startsWith('/')) {
+            console.log(chalk.yellow(`⚠ Unknown command: ${commandKey}`));
+            console.log(chalk.dim('Type /help for a list of available commands.\n'));
+            return true; // Input was intended as a command, but it's unknown
+        }
         return false;
     }
 
