@@ -7,8 +7,8 @@ describe('prints', () => {
     let mockConsoleDir;
 
     beforeEach(() => {
-        mockConsoleLog = mock.method(console, 'log', () => {});
-        mockConsoleDir = mock.method(console, 'dir', () => {});
+        mockConsoleLog = mock.method(console, 'log', () => { });
+        mockConsoleDir = mock.method(console, 'dir', () => { });
     });
 
     afterEach(() => {
@@ -49,6 +49,8 @@ describe('prints', () => {
             assert.ok(output.includes('clear'));
             assert.ok(output.includes('rewind'));
             assert.ok(output.includes('export'));
+            assert.ok(output.includes('save'));
+            assert.ok(output.includes('load'));
             assert.ok(output.includes('exit'));
         });
     });

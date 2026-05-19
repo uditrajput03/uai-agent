@@ -12,6 +12,8 @@ export function printWelcome(provider, model) {
     console.log(chalk.bold.cyan('║') + '    ' + chalk.green('clear') + '   - Clear conversation history           ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('║') + '    ' + chalk.green('rewind') + '  - Undo last message and response       ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('║') + '    ' + chalk.green('export') + '  - Export chat history to markdown      ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('save') + '    - Save the current session           ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + '    ' + chalk.green('load') + '  - Load a saved session              ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('║') + '    ' + chalk.green('exit') + '    - Exit the agent                       ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
     console.log(chalk.bold.cyan('║') + '  ' + chalk.dim('Press Ctrl+C at any time to exit') + '                 ' + chalk.bold.cyan('║'));

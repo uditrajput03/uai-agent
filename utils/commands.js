@@ -162,8 +162,9 @@ export function showHelp() {
     console.log('  ' + chalk.cyan('/help') + '     ' + chalk.dim('Show this help message'));
     console.log('  ' + chalk.cyan('/clear') + '    ' + chalk.dim('Clear conversation history (keeps system prompt)'));
     console.log('  ' + chalk.cyan('/rewind') + '   ' + chalk.dim('Undo the last message and assistant response'));
-    console.log('  ' + chalk.cyan('/export') + '   ' + chalk.dim('Export chat history to a markdown file'));
     console.log('  ' + chalk.cyan('/save') + '     ' + chalk.dim('Save the current session'));
+    console.log('  ' + chalk.cyan('/load') + '     ' + chalk.dim('Load a saved session'));
+    console.log('  ' + chalk.cyan('/export') + '   ' + chalk.dim('Export chat history to a markdown file'));
     console.log('  ' + chalk.cyan('/model') + '    ' + chalk.dim('Change the current model/provider'));
     console.log('  ' + chalk.cyan('/exit') + '     ' + chalk.dim('Exit the agent'));
     console.log('');
@@ -226,7 +227,7 @@ export async function changeModel(context) {
     console.log(chalk.green(`\n✓ Model changed to: ${config.provider}/${config.model}\n`));
 }
 
-export async function importSession(msgArray, projectRoot) {
+export async function loadSession(msgArray, projectRoot) {
     const sessionsDir = getSessionsDir(projectRoot);
     if (!fs.existsSync(sessionsDir)) {
         return;
@@ -238,7 +239,7 @@ export async function importSession(msgArray, projectRoot) {
     }
 
     const selection = global.__MOCK_SEARCH_RESULT || await search({
-        message: 'Select a session to import:',
+        message: 'Select a session to load:',
         source: async (term, { signal } = {}) => {
             if (!term) return files.map(f => ({ name: f, value: f }));
 
@@ -250,7 +251,7 @@ export async function importSession(msgArray, projectRoot) {
     });
 
     if (!selection) {
-        console.log(chalk.dim('Session import cancelled.\n'));
+        console.log(chalk.dim('Session load cancelled.\n'));
         return;
     }
 
@@ -260,9 +261,9 @@ export async function importSession(msgArray, projectRoot) {
         const parsed = JSON.parse(data);
         msgArray.length = 0;
         msgArray.push(...parsed);
-        console.log(chalk.green(`✓ Session imported successfully from .uai/sessions/${selection}.`));
+        console.log(chalk.green(`✓ Session loaded successfully from .uai/sessions/${selection}.`));
     } catch (err) {
-        console.error(chalk.red('✗ Error importing session:'), err.message);
+        console.error(chalk.red('✗ Error loading session:'), err.message);
     }
     console.log('');
 }
@@ -275,9 +276,10 @@ const commands = {
     help: { fn: showHelp, description: 'Show help message' },
     clear: { fn: clearConversation, description: 'Clear conversation history' },
     rewind: { fn: rewindConversation, description: 'Undo last message and response' },
-    export: { fn: exportConversation, description: 'Export chat history to markdown' },
     save: { fn: saveSessionCommand, description: 'Save current session' },
-    import: { fn: importSession, description: 'Import a saved session' },
+    load: { fn: loadSession, description: 'Load a saved session' },
+    export: { fn: exportConversation, description: 'Export chat history to markdown' },
+    import: { fn: loadSession, description: 'Alias for /load - load a saved session' },
     model: { fn: changeModel, description: 'Change the current model/provider' },
     exit: { fn: exitAgent, description: 'Exit the agent' },
 };
@@ -304,7 +306,7 @@ export async function handleCommand(trimmedInput, context) {
         await command.fn(msgArray, provider, model, __dirname);
     } else if (commandKey === 'save') {
         await command.fn(msgArray, __dirname, sessionName);
-    } else if (commandKey === 'import') {
+    } else if (commandKey === 'load' || commandKey === 'import') {
         await command.fn(msgArray, __dirname);
     } else if (commandKey === 'model') {
         await command.fn(context);

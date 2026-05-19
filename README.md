@@ -20,7 +20,7 @@ A secure, intelligent CLI agent that safely executes AI-driven file operations a
 - **💬 Enhanced CLI Experience**:  
   - Real-time streaming responses with optional reasoning output  
   - Context-aware commands (`@./file.txt` or `@workspace` in messages)  
-  - Conversation management: `/clear`, `/rewind`, `/export`
+  - Conversation management: `/clear`, `/rewind`, `/save`, `/load`, `/export`
 - **🤖 Multi-Provider Ready**:  
   Supports Alibaba, NVIDIA, Cloudflare, and Z.AI with 10+ model options
 - **🧼 Automatic Redaction**:  
@@ -82,7 +82,9 @@ uai
 | `/help` | Show this guide |
 | `/clear` | Reset conversation (keeps system prompt) |
 | `/rewind` | Undo last message + response |
-| `/export` | Save chat to Markdown file |
+| `/save` | Save current session to `.uai/sessions/` |
+| `/load` | Load a saved session from `.uai/sessions/` |
+| `/export` | Export chat to Markdown file |
 | `/model` | Switch provider/model |
 | `/exit` | Quit gracefully |
 | `Ctrl+C` | Interrupt or exit |

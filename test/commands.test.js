@@ -13,7 +13,7 @@ const {
     exportConversation,
     saveSession,
     saveSessionCommand,
-    importSession
+    loadSession
 } = commandsModule;
 
 
@@ -344,7 +344,7 @@ describe('commands - saveSessionCommand', () => {
     });
 });
 
-describe('commands - importSession', () => {
+describe('commands - loadSession', () => {
     const testDir = './test/_temp_import';
     let msgArray;
 
@@ -361,13 +361,13 @@ describe('commands - importSession', () => {
     });
 
     it('should ignore if no .uai/sessions dir exists', async () => {
-        await importSession(msgArray, testDir);
+        await loadSession(msgArray, testDir);
         assert.strictEqual(msgArray.length, 1);
     });
 
     it('should ignore if no json files exist', async () => {
         fs.mkdirSync(path.join(testDir, '.uai', 'sessions'), { recursive: true });
-        await importSession(msgArray, testDir);
+        await loadSession(msgArray, testDir);
         assert.strictEqual(msgArray.length, 1);
     });
 });
