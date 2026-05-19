@@ -14,7 +14,7 @@ import { addUserContext } from './utils/userAppend.js';
 import { tools } from './config/tools.js';
 
 import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from './utils/prints.js';
-import { changeModel, handleCommand } from './utils/commands.js';
+import { changeModel, handleCommand, saveSession } from './utils/commands.js';
 import { getApprovalRequirements } from './utils/approval.js';
 // ============================================
 // CONFIGURATION
@@ -43,6 +43,8 @@ const systemPrompt = agentPrompt;
 const msgArray = [
     { "role": "system", "content": systemPrompt }
 ];
+
+const sessionName = `session-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 
 // ============================================
 // SIGNAL HANDLERS
@@ -95,7 +97,7 @@ async function main() {
     const trimmedInput = inputMsg?.trim()?.toLowerCase();
 
     // Handle special commands via command handler
-    const commandContext = { msgArray, config, __dirname };
+    const commandContext = { msgArray, config, __dirname, sessionName };
     const isCommand = await handleCommand(trimmedInput, commandContext);
     if (isCommand) return;
 
@@ -259,6 +261,8 @@ async function main() {
         }
     }
     finalToolCalls = {};
+
+    saveSession(msgArray, __dirname, sessionName);
 }
 // ============================================
 // START

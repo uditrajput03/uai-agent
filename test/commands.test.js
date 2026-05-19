@@ -10,7 +10,10 @@ const {
     rewindConversation,
     exitAgent,
     showHelp,
-    exportConversation
+    exportConversation,
+    saveSession,
+    saveSessionCommand,
+    importSession
 } = commandsModule;
 
 
@@ -251,8 +254,120 @@ describe('commands - exportConversation', () => {
     it('should export assistant tool calls with missing function data safely', async () => {
         msgArray.push({ role: 'user', content: 'do tool' });
         msgArray.push({ role: 'assistant', content: null, tool_calls: [{ id: '1' }] });
+        global.__MOCK_ASK_ANSWER = "missing-function.md";
+        await assert.doesNotReject(() => exportConversation(msgArray, "test", "model", testDir));
+    });
+});
+describe('commands - saveSession', () => {
+    const testDir = './test/_temp_save';
+    let msgArray;
 
-        global.__MOCK_ASK_ANSWER = 'missing-function.md';
-        await assert.doesNotReject(() => exportConversation(msgArray, 'test', 'model', testDir));
+    beforeEach(() => {
+        if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+        fs.mkdirSync(testDir, { recursive: true });
+        msgArray = [{ role: 'system', content: 'You are a test agent.' }];
+    });
+
+    afterEach(() => {
+        if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+        delete global.__MOCK_ASK_ANSWER;
+    });
+
+    it('should create .uai/sessions folder and save session.json', () => {
+        msgArray.push({ role: 'user', content: 'Hello' });
+
+        saveSession(msgArray, testDir);
+
+        const savePath = path.join(testDir, '.uai', 'sessions', 'session.json');
+        assert.ok(fs.existsSync(savePath));
+
+        const savedData = JSON.parse(fs.readFileSync(savePath, 'utf-8'));
+        assert.strictEqual(savedData.length, 2);
+        assert.strictEqual(savedData[1].content, 'Hello');
+    });
+
+    it('should save with a custom session name', () => {
+        const customName = 'mysession-123.json';
+        saveSession(msgArray, testDir, customName);
+
+        const savePath = path.join(testDir, '.uai', 'sessions', customName);
+        assert.ok(fs.existsSync(savePath));
+    });
+});
+
+describe('commands - saveSessionCommand', () => {
+    const testDir = './test/_temp_save_cmd';
+    let msgArray;
+
+    beforeEach(() => {
+        if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+        fs.mkdirSync(testDir, { recursive: true });
+        msgArray = [{ role: 'system', content: 'agent test.' }];
+    });
+
+    afterEach(() => {
+        if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+    });
+
+    it('should wrap saveSession and capture errors safely', async () => {
+        global.__MOCK_ASK_ANSWER = '';
+
+        await assert.doesNotReject(() =>
+            saveSessionCommand(msgArray, testDir, 'test-session.json')
+        );
+        assert.ok(fs.existsSync(path.join(testDir, '.uai', 'sessions', 'test-session.json')));
+    });
+
+    it('should ask for an optional session name', async () => {
+        global.__MOCK_ASK_ANSWER = 'named-session';
+
+        await saveSessionCommand(msgArray, testDir, 'test-session.json');
+
+        assert.ok(fs.existsSync(path.join(testDir, '.uai', 'sessions', 'named-session.json')));
+    });
+
+    it('should keep .json extension if provided', async () => {
+        global.__MOCK_ASK_ANSWER = 'named-session.json';
+
+        await saveSessionCommand(msgArray, testDir, 'test-session.json');
+
+        assert.ok(fs.existsSync(path.join(testDir, '.uai', 'sessions', 'named-session.json')));
+    });
+
+    it('should sanitize traversal in session name', async () => {
+        global.__MOCK_ASK_ANSWER = '../evil';
+
+        await saveSessionCommand(msgArray, testDir, 'test-session.json');
+
+        assert.ok(fs.existsSync(path.join(testDir, '.uai', 'sessions', 'evil.json')));
+        assert.strictEqual(fs.existsSync(path.join(testDir, '.uai', 'evil.json')), false);
+    });
+});
+
+describe('commands - importSession', () => {
+    const testDir = './test/_temp_import';
+    let msgArray;
+
+    beforeEach(() => {
+        if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+        msgArray = [{ role: 'system', content: 'You are a test agent.' }];
+
+        global.__MOCK_SEARCH_RESULT = 'session.json';
+    });
+
+    afterEach(() => {
+        if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+        delete global.__MOCK_SEARCH_RESULT;
+    });
+
+    it('should ignore if no .uai/sessions dir exists', async () => {
+        await importSession(msgArray, testDir);
+        assert.strictEqual(msgArray.length, 1);
+    });
+
+    it('should ignore if no json files exist', async () => {
+        fs.mkdirSync(path.join(testDir, '.uai', 'sessions'), { recursive: true });
+        await importSession(msgArray, testDir);
+        assert.strictEqual(msgArray.length, 1);
     });
 });

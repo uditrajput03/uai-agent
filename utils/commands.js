@@ -34,7 +34,7 @@ export function rewindConversation(msgArray) {
     // We need to remove everything after the last user message
     while (i > 0) {
         const msg = msgArray[i];
-        
+
         if (msg.role === 'tool') {
             msgArray.splice(i, 1);
             toolMessagesRemoved++;
@@ -129,12 +129,41 @@ export function exitAgent() {
     process.exit(0);
 }
 
+export function getSessionsDir(projectRoot) {
+    return path.resolve(projectRoot, '.uai', 'sessions');
+}
+
+export function saveSession(msgArray, projectRoot, sessionName = 'session.json') {
+    const sessionsDir = getSessionsDir(projectRoot);
+    if (!fs.existsSync(sessionsDir)) {
+        fs.mkdirSync(sessionsDir, { recursive: true });
+    }
+    const sessionPath = path.join(sessionsDir, sessionName);
+    fs.writeFileSync(sessionPath, JSON.stringify(msgArray, null, 2), 'utf-8');
+}
+
+export async function saveSessionCommand(msgArray, projectRoot, sessionName = 'session.json') {
+    const filenameInput = await askQuestion(chalk.yellow(`Enter session name (default: ${sessionName}): `));
+    const rawFilename = filenameInput?.trim() || sessionName;
+    const safeBaseName = path.basename(rawFilename).replace(/[\\/]/g, '') || sessionName;
+    const finalFilename = safeBaseName.endsWith('.json') ? safeBaseName : `${safeBaseName}.json`;
+
+    try {
+        saveSession(msgArray, projectRoot, finalFilename);
+        console.log(chalk.green(`✓ Session saved successfully to .uai/sessions/${finalFilename}.`));
+    } catch (err) {
+        console.error(chalk.red('✗ Error saving session:'), err.message);
+    }
+    console.log('');
+}
+
 export function showHelp() {
     console.log('\n' + chalk.bold.yellow('⌨  Help & Commands:'));
     console.log('  ' + chalk.cyan('/help') + '     ' + chalk.dim('Show this help message'));
     console.log('  ' + chalk.cyan('/clear') + '    ' + chalk.dim('Clear conversation history (keeps system prompt)'));
     console.log('  ' + chalk.cyan('/rewind') + '   ' + chalk.dim('Undo the last message and assistant response'));
     console.log('  ' + chalk.cyan('/export') + '   ' + chalk.dim('Export chat history to a markdown file'));
+    console.log('  ' + chalk.cyan('/save') + '     ' + chalk.dim('Save the current session'));
     console.log('  ' + chalk.cyan('/model') + '    ' + chalk.dim('Change the current model/provider'));
     console.log('  ' + chalk.cyan('/exit') + '     ' + chalk.dim('Exit the agent'));
     console.log('');
@@ -196,6 +225,48 @@ export async function changeModel(context) {
 
     console.log(chalk.green(`\n✓ Model changed to: ${config.provider}/${config.model}\n`));
 }
+
+export async function importSession(msgArray, projectRoot) {
+    const sessionsDir = getSessionsDir(projectRoot);
+    if (!fs.existsSync(sessionsDir)) {
+        return;
+    }
+
+    const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+    if (files.length === 0) {
+        return;
+    }
+
+    const selection = global.__MOCK_SEARCH_RESULT || await search({
+        message: 'Select a session to import:',
+        source: async (term, { signal } = {}) => {
+            if (!term) return files.map(f => ({ name: f, value: f }));
+
+            const lower = term.toLowerCase();
+            return files.filter(f => f.toLowerCase().includes(lower))
+                .map(f => ({ name: f, value: f }));
+        },
+        pageSize: 10,
+    });
+
+    if (!selection) {
+        console.log(chalk.dim('Session import cancelled.\n'));
+        return;
+    }
+
+    const sessionPath = path.join(sessionsDir, selection);
+    try {
+        const data = fs.readFileSync(sessionPath, 'utf8');
+        const parsed = JSON.parse(data);
+        msgArray.length = 0;
+        msgArray.push(...parsed);
+        console.log(chalk.green(`✓ Session imported successfully from .uai/sessions/${selection}.`));
+    } catch (err) {
+        console.error(chalk.red('✗ Error importing session:'), err.message);
+    }
+    console.log('');
+}
+
 // ============================================
 // COMMAND HANDLER
 // ============================================
@@ -205,6 +276,8 @@ const commands = {
     clear: { fn: clearConversation, description: 'Clear conversation history' },
     rewind: { fn: rewindConversation, description: 'Undo last message and response' },
     export: { fn: exportConversation, description: 'Export chat history to markdown' },
+    save: { fn: saveSessionCommand, description: 'Save current session' },
+    import: { fn: importSession, description: 'Import a saved session' },
     model: { fn: changeModel, description: 'Change the current model/provider' },
     exit: { fn: exitAgent, description: 'Exit the agent' },
 };
@@ -223,12 +296,16 @@ export async function handleCommand(trimmedInput, context) {
     }
 
     const command = commands[commandKey];
-    const { msgArray, config, __dirname } = context;
+    const { msgArray, config, __dirname, sessionName } = context;
     const provider = config.provider || 'none';
     const model = config.model || 'none';
 
     if (commandKey === 'export') {
         await command.fn(msgArray, provider, model, __dirname);
+    } else if (commandKey === 'save') {
+        await command.fn(msgArray, __dirname, sessionName);
+    } else if (commandKey === 'import') {
+        await command.fn(msgArray, __dirname);
     } else if (commandKey === 'model') {
         await command.fn(context);
     } else if (['clear', 'rewind'].includes(commandKey)) {
