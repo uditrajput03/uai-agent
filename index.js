@@ -34,11 +34,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const systemPath = path.resolve(__dirname, 'config/SYSTEM.md');
-// const toolsPath = path.resolve(__dirname, 'config/TOOLS.md');
-
-const agentPrompt = fs.readFileSync(systemPath, 'utf-8');
-// const toolsPrompt = fs.readFileSync(toolsPath, 'utf-8');
-const systemPrompt = agentPrompt;
+const systemPrompt = fs.readFileSync(systemPath, 'utf-8');
 
 const msgArray = [
     { "role": "system", "content": systemPrompt }
@@ -113,7 +109,7 @@ async function main() {
     if (!lastMessageWasTool) {
         msgArray.push({ "role": "user", "content": inputMsg });
     }
-    if (keys.DEBUG === 'true') {
+    if (keys.DEBUG === true) {
         console.log(chalk.dim('Message Array:'), msgArray);
     }
 
@@ -136,7 +132,7 @@ async function main() {
 
         let isFirstChunk = true;
         for await (const chunk of completion) {
-            if (keys.DEBUG == true) {
+            if (keys.DEBUG === true) {
                 let toLog = chunk.choices[0]?.delta?.tool_calls
                 // if (toLog) console.log(toLog);
             }
@@ -145,7 +141,7 @@ async function main() {
             let toolCalls = chunk.choices[0]?.delta?.tool_calls;
 
             if (reasoning) {
-                if (keys.showThinking == true) {
+                if (keys.showThinking === true) {
                     process.stdout.write(chalk.dim.blue(reasoning));
                 }
                 else process.stdout.write(chalk.dim('.'));
@@ -208,7 +204,7 @@ async function main() {
 
     if (finalToolCalls && Object.keys(finalToolCalls).length > 0) {
         finalToolCalls = Object.values(finalToolCalls);
-        if (keys.DEBUG === 'true') {
+        if (keys.DEBUG === true) {
             console.log(JSON.stringify(finalToolCalls, null, 2));
         }
         msgArray.push({ "role": "assistant", "content": null, tool_calls: finalToolCalls });
@@ -233,7 +229,11 @@ async function main() {
             console.log(chalk.green('✓ Executing tool...'));
             try {
                 const response = await toolCall(finalToolCalls);
-                toolResponse = response || "\nTool executed successfully with no response.";
+                if (Array.isArray(response) && response.length > 0) {
+                    toolResponse = response;
+                } else {
+                    toolResponse = "\nTool executed successfully with no response.";
+                }
             } catch (error) {
                 toolResponse = `\nError executing tool call: ${error.message}`;
                 console.error(chalk.red('✗') + chalk.red(toolResponse));

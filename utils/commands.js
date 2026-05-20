@@ -259,6 +259,10 @@ export async function loadSession(msgArray, projectRoot) {
     try {
         const data = fs.readFileSync(sessionPath, 'utf8');
         const parsed = JSON.parse(data);
+        if (!Array.isArray(parsed)) {
+            console.error(chalk.red('✗ Error loading session: session data is not a valid message array.'));
+            return;
+        }
         msgArray.length = 0;
         msgArray.push(...parsed);
         console.log(chalk.green(`✓ Session loaded successfully from .uai/sessions/${selection}.`));

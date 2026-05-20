@@ -64,7 +64,7 @@ export const tools = [
         type: "function",
         function: {
             name: "edit",
-            description: "Edit a file by replacing a specific string with new content. e.g (edit ./file.txt 'old text' 'new text')",
+            description: "Edit a file by replacing a specific string with new content. Only First occurrence is replaced. e.g (edit ./file.txt 'old text' 'new text')",
             strict: true,
             parameters: {
                 type: "object",

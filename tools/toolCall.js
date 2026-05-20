@@ -109,7 +109,7 @@ async function executeSingleTool(call) {
     }
 
     // ── Debug logging ──
-    if (keys.DEBUG === 'true') {
+    if (keys.DEBUG === true) {
         console.log('Tool Call - tool:', toolName);
         console.log('Tool Call - Input:', input);
     }
