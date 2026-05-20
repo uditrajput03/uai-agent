@@ -95,6 +95,103 @@ export const models = {
             model: "gpt-5.4-mini",
             extra_body: { "enable_thinking": true }
         },
+    },
+    // Added providers
+    anthropic: {
+        apiKey: keys.ANTHROPIC_API_KEY,
+        baseURL: 'https://api.anthropic.com/v1',
+        sonnet: {
+            model: "claude-3-5-sonnet-20260520",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        opus: {
+            model: "claude-3-opus-20240229",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        haiku: {
+            model: "claude-3-haiku-20240307",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        sonnet3: {
+            model: "claude-3-sonnet-20240229",
+            temperature: 0.7,
+            top_p: 0.95,
+        }
+    },
+    gemini: {
+        apiKey: keys.GEMINI_API_KEY,
+        baseURL: 'https://generativelanguage.googleapis.com/v1beta',
+        flash: {
+            model: "gemini-1.5-flash",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        pro: {
+            model: "gemini-1.5-pro",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        proVision: {
+            model: "gemini-1.0-pro-vision",
+            temperature: 0.7,
+            top_p: 0.95,
+        }
+    },
+    mistral: {
+        apiKey: keys.MISTRAL_API_KEY,
+        baseURL: 'https://api.mistral.ai/v1',
+        large: {
+            model: "mistral-large-latest",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        medium: {
+            model: "mistral-medium-latest",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        small: {
+            model: "mistral-small-latest",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        tiny: {
+            model: "open-mistral-nemo",
+            temperature: 0.7,
+            top_p: 0.95,
+        }
+    },
+    groq: {
+        apiKey: keys.GROQ_API_KEY,
+        baseURL: 'https://api.groq.com/openai/v1',
+        llama3: {
+            model: "llama3-70b-8192",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        llama37b: {
+            model: "llama3-70b-8192",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        llama38b: {
+            model: "llama3-8b-8192",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        mixtral: {
+            model: "mixtral-8x7b-32768",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+        gemma: {
+            model: "gemma-7b-it",
+            temperature: 0.7,
+            top_p: 0.95,
+        }
     }
 };
 
