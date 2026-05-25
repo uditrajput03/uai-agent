@@ -1,5 +1,9 @@
 # uai-agent
 
+<p align="center">
+  <img src="./assets/hero.png" alt="uai-agent CLI preview" width="600">
+</p>
+
 A secure, provider-agnostic AI coding agent for the terminal. `uai-agent` runs inside your current workspace and helps inspect files, edit code, and execute shell commands through an explicit approval workflow.
 
 It is designed for developers who want the productivity of an AI agent without giving up control over file access, command execution, or model/provider configuration.

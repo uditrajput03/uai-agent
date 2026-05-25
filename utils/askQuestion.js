@@ -13,6 +13,15 @@ function getReadline() {
             historySize: 100,
             tabSize: 4
         });
+
+        // readline consumes Ctrl+C while a question is active and emits SIGINT on
+        // the interface instead of the process. Forward it to the process-level
+        // handler so Ctrl+C exits consistently from prompts, approval questions,
+        // and normal chat input.
+        rl.on('SIGINT', () => {
+            process.emit('SIGINT');
+        });
+
         rl.history = savedHistory;
     }
     return rl;
@@ -53,7 +62,7 @@ export function pauseReadline() {
 
         if (!blockInputHandler) {
             blockInputHandler = (data) => {
-                if (data.toString() === '\x03') { // Ctrl+C
+                if (data.includes(3)) { // Ctrl+C
                     process.emit('SIGINT');
                 }
             };

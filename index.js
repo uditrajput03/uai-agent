@@ -47,16 +47,10 @@ const sessionName = `session-${new Date().toISOString().replace(/[:.]/g, '-')}.j
 // ============================================
 
 process.on('SIGINT', () => {
-    console.log('\n' + chalk.yellow('\n⚠ Interrupted. Type "exit" to quit or continue chatting.'));
-    console.log(chalk.dim('Press Ctrl+C again to force exit.'));
-
-    // Set up one-time force exit handler
-    const forceExit = () => {
-        console.log('\n' + chalk.cyan('👋 Force exit. Goodbye!') + '\n');
-        closeReadline();
-        process.exit(0);
-    };
-    process.once('SIGINT', forceExit);
+    console.log('\n' + chalk.cyan('👋 Interrupted. Goodbye!') + '\n');
+    resumeReadline();
+    closeReadline();
+    process.exit(130);
 });
 
 process.on('SIGTERM', () => {
