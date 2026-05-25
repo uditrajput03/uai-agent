@@ -1,160 +1,315 @@
 # uai-agent
 
-A secure, intelligent CLI agent that safely executes AI-driven file operations and shell commands with explicit user control. Built for developers who need automation with strong safety guarantees.
+A secure, provider-agnostic AI coding agent for the terminal. `uai-agent` runs inside your current workspace and helps inspect files, edit code, and execute shell commands through an explicit approval workflow.
 
-## ✨ Features
+It is designed for developers who want the productivity of an AI agent without giving up control over file access, command execution, or model/provider configuration.
 
-- **🔐 Strict Security Model**:  
-  - Blocks dangerous commands (`rm -rf /`, `shutdown`, `cat /etc/shadow`, etc.)  
-  - Enforces working-directory-only access by default  
-  - Respects `.gitignore` to avoid sensitive files (configurable)
-- **🛠️ Four Core Tools**:  
-  - `read`: Safely read files  
-  - `write`: Create or overwrite files  
-  - `edit`: Replace exact text snippets in files  
-  - `bash`: Execute shell commands with approval
-- **🧠 Smart Approval System**:  
-  - **Auto mode (default)**: Safe file reads auto-execute; bash & writes require confirmation  
-  - **Manual mode**: Per-tool execution/sending prompts  
-  - **Block/Allow modes**: For testing or extreme caution
-- **💬 Enhanced CLI Experience**:  
-  - Real-time streaming responses with optional reasoning output  
-  - Context-aware commands (`@./file.txt` or `@workspace` in messages)  
-  - Conversation management: `/clear`, `/rewind`, `/save`, `/load`, `/export`
-- **🤖 Multi-Provider Ready**:  
-  Supports Alibaba, NVIDIA, Cloudflare, and Z.AI with 10+ model options
-- **🧼 Automatic Redaction**:  
-  Scrubs emails, usernames, and PII from all outputs
+## Highlights
 
-## 📦 Installation
+- **Workspace-scoped execution** — file operations are constrained to the directory where `uai` is launched.
+- **Human-in-the-loop approvals** — review tool calls before writes, edits, shell commands, or sensitive operations run.
+- **Built-in safety controls** — blocks dangerous commands, detects risky paths, and respects `.gitignore` protections.
+- **OpenAI-compatible provider support** — configure OpenAI-compatible APIs from Alibaba Cloud, NVIDIA, Cloudflare, Z.AI, OpenAI, Anthropic, Gemini, Mistral, Groq, and other providers.
+- **Practical coding tools** — includes file reading, writing, precise editing, and controlled shell execution.
+- **Context-aware prompts** — attach files or workspace context directly in chat using tags such as `@./file.js` and `@workspace`.
+- **Session management** — clear, rewind, save, load, export, and switch models without leaving the CLI.
+- **Output redaction** — optionally redact configured secrets or sensitive substrings from displayed output.
+
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [CLI Commands](#cli-commands)
+- [Safety Model](#safety-model)
+- [Adding Providers](#adding-providers)
+- [Development](#development)
+- [Project Structure](#project-structure)
+- [Security Recommendations](#security-recommendations)
+- [License](#license)
+
+## Requirements
+
+- Node.js 18 or newer
+- npm
+- At least one supported model provider API key
+
+## Installation
+
+Clone the repository, install dependencies, and link the CLI globally:
 
 ```bash
+git clone <repository-url>
+cd uai-agent
 npm install
+npm link
 ```
 
-## ⚙️ Configuration
+This registers the `uai` command globally.
 
-### 1. Environment Setup
-Create a `.env` file:
-```env
-# Required: Choose one or more providers
-ALIBABA_API_KEY=your_key
-NVIDIA_API_KEY=your_key
-WORKER_AI=account_id:api_token
-ZAI=your_zai_key
+You can then launch the agent from any project directory:
 
-# Optional settings
-DEBUG=false
-showThinking=false
-gitIgnoreUnsafePaths=true  # Block .gitignore-matched paths by default
-```
-
-> 💡 **Note**: `config/keys.js` is gitignored—never commit API keys.
-
-### 2. Default Model Selection
-Set your preferred provider/model in `.env`:
-```env
-defaultProvider=alibaba
-defaultModel=qwen
-```
-
-Or change interactively with `/model`.
-
-## 🚀 Usage
-
-Start the agent:
 ```bash
-node index.js
-# or if globally linked:
+cd ~/your-project
 uai
 ```
 
-### Basic Interaction
-- Type natural language requests (`List all JS files`)
-- Approve tool calls when prompted (`y/N`)
-- Use context tags in messages:
-  - `@./README.md` → auto-includes file content
-  - `@workspace` → adds `ls -la` output as context
+`uai-agent` operates in the directory from which it is started. To use it in another project, change directories and run `uai` again.
 
-### Built-in Commands
-| Command | Description |
-|---------|-------------|
-| `/help` | Show this guide |
-| `/clear` | Reset conversation (keeps system prompt) |
-| `/rewind` | Undo last message + response |
-| `/save` | Save current session to `.uai/sessions/` |
-| `/load` | Load a saved session from `.uai/sessions/` |
-| `/export` | Export chat to Markdown file |
-| `/model` | Switch provider/model |
-| `/exit` | Quit gracefully |
-| `Ctrl+C` | Interrupt or exit |
+## Configuration
 
-## 🔒 Safety Architecture
+### 1. Create a local key file
 
-### Path Restrictions
-- All file/tool operations are **sandboxed to the current directory** by default
-- Absolute paths (`/etc/passwd`) and parent traversal (`../secret`) trigger approval prompts
-- Files matching `.gitignore` patterns are blocked unless explicitly allowed
+Copy the example configuration:
 
-### Command Protections
-**Always Blocked**:
-- System destruction: `rm -rf /`, `mkfs`, `dd if=/dev/zero`
-- Privilege escalation: `sudo`, `chmod 777 /etc/shadow`
-- Data exfiltration: `nc -e`, `/dev/tcp/`, `cat /etc/passwd`
+```bash
+cp config/keys.example.js config/keys.js
+```
 
-**Require Confirmation**:
-- File deletion: `rm -rf node_modules`
-- Git history rewrite: `git push --force`
-- Docker/container operations
+`config/keys.js` is intended for local secrets and should not be committed.
 
-### Approval Modes (`config.js`)
+### 2. Add provider credentials
+
+Edit `config/keys.js` and provide credentials for the providers you want to use:
+
 ```js
-autoApprove: {
-  default: 'auto', // Options: 'auto' | 'manual' | 'block' | 'allow'
-}
+export const keys = {
+    WORKER_AI: "your-account-id:your-worker-api-token",
+    NVIDIA_API_KEY: "your-nvidia-api-key",
+    ALIBABA_API_KEY: "your-alibaba-dashscope-api-key",
+    ZAI: "your-zai-api-key",
+
+    OPENAI_API_KEY: "your-openai-or-proxy-api-key",
+    OPENAI_BASE_URL: "https://api.openai.com/v1",
+
+    ANTHROPIC_API_KEY: "your-anthropic-api-key",
+    GEMINI_API_KEY: "your-gemini-api-key",
+    MISTRAL_API_KEY: "your-mistral-api-key",
+    GROQ_API_KEY: "your-groq-api-key",
+
+    DEBUG: false,
+    showThinking: false,
+
+    defaultProvider: "alibaba",
+    defaultModel: "deepseekflash",
+
+    gitIgnoreUnsafePaths: true,
+    REDACTION_PATTERN: ["placeholder"],
+};
 ```
-- **`auto`**: Reads auto-run; bash/writes need approval
-- **`manual`**: Configure per-tool prompts
-- **`block`**: Rejects all tool calls
-- **`allow`**: ⚠️ Unsafe—bypasses all checks (for testing only)
 
-## 🛠️ Customization
+### 3. Choose the default model
 
-### Adding New Tools
-1. Create `tools/myTool.js` exporting an async function
-2. Register it in `toolHandlers` inside `tools/toolCall.js`
-3. Define its schema in `config/tools.js`
+Set the default provider and model in `config/keys.js`:
 
-### Modifying Safety Rules
-- Adjust `BLOCKED_COMMANDS` in `tools/bash.js`
-- Tune path validation in `utils/approval.js`
-- Update system prompt in `config/SYSTEM.md`
-
-## ⚠️ Critical Safety Notes
-
-1. **Never run as root** – The agent executes real system commands
-2. **Review every tool call** – Malicious prompts could request harmful actions
-3. **Audit `.gitignore`** – Ensure sensitive files are properly excluded
-4. **Use `DEBUG=true`** – Inspect raw AI payloads during development
-
-## 📁 Project Structure
+```js
+defaultProvider: "alibaba",
+defaultModel: "deepseekflash",
 ```
+
+You can also switch models interactively with `/model`.
+
+## Usage
+
+Start the CLI inside the project you want the agent to work on:
+
+```bash
+cd ~/your-project
+uai
+```
+
+Example prompts:
+
+```text
+List the main source files in this project.
+Review @./README.md and suggest improvements.
+Find the bug in the authentication flow.
+Add tests for the userAppend utility.
+Run the test suite and fix failing tests.
+```
+
+### Context tags
+
+Use context tags to give the model targeted project information:
+
+| Tag | Purpose |
+| --- | --- |
+| `@./path/to/file` | Attach a specific file to the conversation |
+| `@workspace` | Attach a workspace listing/context summary |
+
+## CLI Commands
+
+| Command | Description |
+| --- | --- |
+| `/help` | Show available commands and usage help |
+| `/clear` | Reset the current conversation |
+| `/rewind` | Remove the last exchange from the conversation |
+| `/save` | Save the current session |
+| `/load` | Load a saved session |
+| `/export` | Export the conversation to Markdown |
+| `/model` | Switch provider/model during the session |
+| `/exit` | Exit the CLI |
+
+## Safety Model
+
+`uai-agent` is built around explicit control and conservative defaults.
+
+### File and path protections
+
+- File operations are scoped to the current working directory.
+- Parent traversal and out-of-workspace paths are treated as sensitive.
+- `.gitignore`-matched files can be blocked from tool access when `gitIgnoreUnsafePaths` is enabled.
+- Sensitive path handling is centralized in `utils/pathSecurity.js`.
+
+### Command protections
+
+Shell commands are executed through the built-in `bash` tool and are subject to command validation and approval prompts.
+
+Examples of operations that are blocked or treated as high risk include:
+
+| Blocked or high-risk operation | Reason |
+| --- | --- |
+| `rm -rf /`, `mkfs`, destructive `dd` usage | Destructive system-level operations |
+| Privilege escalation such as `sudo` or unsafe permission changes | Potential host compromise |
+| Access to sensitive system files | Credential or privacy risk |
+| Git history rewrites and force pushes | Potential irreversible repository changes |
+| Docker/container operations | Can affect external runtime state |
+
+### Approval modes
+
+Approval behavior is configured in `config.js` through the `autoApprove` settings.
+
+| Mode | Behavior |
+| --- | --- |
+| `auto` | Safe file operations can run automatically; shell commands and sensitive operations require confirmation |
+| `manual` | Uses per-tool prompt settings for execution and result sharing |
+| `block` | Rejects all tool calls |
+| `allow` | Approves all tool calls automatically; intended only for controlled testing |
+
+> **Important:** `allow` mode disables normal approval safeguards. Do not use it in untrusted repositories or with sensitive data.
+
+## Adding Providers
+
+Provider configuration is defined in `config.js`. Because the project uses OpenAI-compatible chat completion calls, additional compatible providers can be added by registering an API key, base URL, and one or more model entries.
+
+### 1. Add credentials
+
+Add the credential to `config/keys.js`:
+
+```js
+export const keys = {
+    // existing keys...
+    TOGETHER_API_KEY: "your-together-api-key",
+};
+```
+
+### 2. Register the provider
+
+Add a provider entry to the `models` object in `config.js`:
+
+```js
+export const models = {
+    // existing providers...
+
+    together: {
+        apiKey: keys.TOGETHER_API_KEY,
+        baseURL: "https://api.together.xyz/v1",
+        llama: {
+            model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            temperature: 0.7,
+            top_p: 0.95,
+        },
+    },
+};
+```
+
+The provider and model will then be available through `/model`.
+
+### Model parameters
+
+Model configuration is passed directly into the chat completion request. Provider-specific fields such as `temperature`, `top_p`, `extra_body`, or other supported options can be included in the model entry.
+
+## Development
+
+Install dependencies and run tests:
+
+```bash
+npm install
+npm test
+```
+
+Watch mode:
+
+```bash
+npm run test:watch
+```
+
+During local development, keep the CLI linked:
+
+```bash
+npm link
+```
+
+Because the global command is symlinked to the repository, source changes are reflected the next time you run `uai`.
+
+### Adding tools
+
+To add a new tool:
+
+1. Create a tool implementation in `tools/`.
+2. Register the handler in `tools/toolCall.js`.
+3. Define the tool schema in `config/tools.js`.
+4. Add or update tests in `test/`.
+
+### Customizing safety behavior
+
+Relevant files:
+
+- `tools/bash.js` — command execution and command-level protections
+- `utils/pathSecurity.js` — path validation and workspace restrictions
+- `utils/approval.js` — approval workflow
+- `config/SYSTEM.md` — system prompt and agent behavior instructions
+- `config/tools.js` — tool schemas exposed to the model
+
+## Project Structure
+
+```text
 uai-agent/
-├── index.js              # Main agent loop
-├── config.js             # Model configs & approval rules
+├── index.js              # Main CLI and agent loop
+├── config.js             # Provider, model, and approval configuration
 ├── config/
-│   ├── SYSTEM.md         # AI behavior instructions
+│   ├── keys.example.js   # Example local configuration
+│   ├── keys.js           # Local secrets; do not commit
+│   ├── SYSTEM.md         # Agent behavior instructions
 │   └── tools.js          # Tool schemas
 ├── tools/
-│   ├── bash.js           # Secure command executor
-│   ├── fsOps.js          # File read/write/edit
-│   └── toolCall.js       # Tool dispatcher
+│   ├── bash.js           # Controlled shell command execution
+│   ├── fsOps.js          # File read/write/edit operations
+│   └── toolCall.js       # Tool dispatching
 ├── utils/
-│   ├── approval.js       # Path/command validation
-│   ├── commands.js       # CLI command handlers
-│   └── userAppend.js     # Context tag processor (@file)
-└── .env                  # API keys (gitignored)
+│   ├── approval.js       # Approval workflow
+│   ├── askQuestion.js    # Interactive prompt helpers
+│   ├── commands.js       # Slash command handlers
+│   ├── pathSecurity.js   # Path safety checks
+│   ├── prints.js         # CLI output formatting
+│   ├── redact.js         # Output redaction
+│   └── userAppend.js     # Context tag processing
+├── test/                 # Test suite
+├── package.json
+└── README.md
 ```
 
-## 📜 License
+## Security Recommendations
+
+- Do not run the agent as root or with elevated privileges.
+- Review tool calls before approving them.
+- Avoid using the agent in repositories that contain production secrets.
+- Keep `config/keys.js` out of version control.
+- Configure `REDACTION_PATTERN` for values that should never appear in output.
+- Keep `gitIgnoreUnsafePaths` enabled unless you understand the risk.
+- Prefer least-privilege API keys for model providers.
+
+## License
+
 MIT
