@@ -40,4 +40,5 @@ temp/
 test.js
 # *.test.js
 config/keys.js
+/src/config/keys.js
 .uai/
