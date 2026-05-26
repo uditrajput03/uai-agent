@@ -5,7 +5,7 @@ export function getWorkspaceRoot() {
     return fs.realpathSync(process.cwd());
 }
 
-export function resolveWorkspacePath(filePath, { requireParent = true } = {}) {
+export function resolveWorkspacePath(filePath: string, { requireParent = true } = {}) {
     if (typeof filePath !== 'string' || filePath.trim() === '') {
         return { ok: false, reason: 'Invalid path: path must be a non-empty string' };
     }
@@ -33,7 +33,10 @@ export function resolveWorkspacePath(filePath, { requireParent = true } = {}) {
             }
         }
     } catch (error) {
-        return { ok: false, reason: `Invalid path: ${error.message}` };
+        if(error instanceof Error) {
+            return { ok: false, reason: `Invalid path: ${error.message}` };
+        }
+        return { ok: false, reason: `Invalid path: ${error}` };
     }
 
     const inside = candidate === root || candidate.startsWith(root + path.sep);
@@ -44,11 +47,11 @@ export function resolveWorkspacePath(filePath, { requireParent = true } = {}) {
     return { ok: true, root, resolved, realPath: candidate };
 }
 
-function escapeRegex(text) {
+function escapeRegex(text: string) {
     return text.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
 }
 
-function patternToRegex(pattern) {
+function patternToRegex(pattern: string) {
     let anchored = pattern.startsWith('/');
     let directory = pattern.endsWith('/');
     let p = pattern.replace(/^\//, '').replace(/\/$/, '');
@@ -71,7 +74,7 @@ export function readGitignorePatterns(cwd = process.cwd()) {
         .filter(line => line && !line.startsWith('#') && !line.startsWith('!'));
 }
 
-export function isGitignored(filePath, cwd = process.cwd()) {
+export function isGitignored(filePath: string, cwd = process.cwd()) {
     const root = fs.realpathSync(cwd);
     const resolved = path.resolve(filePath);
     const relative = path.relative(root, resolved).split(path.sep).join('/');
