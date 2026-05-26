@@ -1,6 +1,8 @@
 import chalk from 'chalk';
+import type { ToolCallResponse } from '../tools/toolCall.js';
+import type { FinalToolCall } from '../index.js';
 
-export function printWelcome(provider, model) {
+export function printWelcome(provider: string, model: string) {
     console.log('\n' + chalk.bold.cyan('╔═══════════════════════════════════════════════════╗'));
     console.log(chalk.bold.cyan('║') + '           ' + chalk.bold.white('🤖 UAI Agent - AI Assistant') + '             ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('╠═══════════════════════════════════════════════════╣'));
@@ -24,8 +26,7 @@ export function printWelcome(provider, model) {
 export function printSeparator() {
     console.log(chalk.dim('─'.repeat(60)));
 }
-
-export function printToolCallInfo(finalToolCalls) {
+export function printToolCallInfo(finalToolCalls: FinalToolCall[]) {
     console.log('\n' + chalk.bgYellow.black(' ⚡ Tool Call Detected '));
     finalToolCalls.forEach((toolCall, index) => {
         console.log(chalk.yellow(`Tool Call #${index + 1}:`));
@@ -40,7 +41,7 @@ export function printToolCallInfo(finalToolCalls) {
     });
 }
 
-export function printToolResponse(toolResponse, toolCalls) {
+export function printToolResponse(toolResponse: ToolCallResponse, toolCalls: FinalToolCall[]) {
     console.log('\n' + chalk.blue('📋 Tool Response:'));
     console.log(chalk.dim('─'.repeat(60)));
 
@@ -64,7 +65,7 @@ export function printToolResponse(toolResponse, toolCalls) {
             try {
                 const parsedArgs = JSON.parse(args);
                 if ((toolName === 'write' || toolName === 'edit') && parsedArgs?.filePath) {
-                    args = { filePath: parsedArgs.filePath };
+                    args = JSON.stringify({ filePath: parsedArgs.filePath });
                 } // Only show file path for read/write/edit tools
                 else {
                     args = parsedArgs; // Show full parsed arguments for other tools

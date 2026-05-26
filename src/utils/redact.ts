@@ -1,10 +1,10 @@
 import { keys } from "../config/keys.js";
 
-function escapeRegex(text) {
+function escapeRegex(text: string | RegExp) {
     return String(text).replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
 }
 
-function makeWholeTokenPattern(text, flags = 'gi') {
+function makeWholeTokenPattern(text: string | RegExp, flags = 'gi') {
     return new RegExp(`(?<![A-Za-z0-9_])${escapeRegex(text)}(?![A-Za-z0-9_])`, flags);
 }
 
@@ -20,7 +20,7 @@ const REDACTION_PATTERNS = {
     }
 };
 
-let customPatterns = [];
+let customPatterns: RegExp[] = [];
 if (keys.REDACTION_PATTERN) {
     try {
         const parsed = keys.REDACTION_PATTERN;
@@ -35,8 +35,9 @@ if (keys.REDACTION_PATTERN) {
         }
     } catch (error) {
         // Fallback: treat as comma-separated if not valid JSON
-        if (typeof keys.REDACTION_PATTERN === 'string') {
-            customPatterns = keys.REDACTION_PATTERN
+        const pattersnString = keys.REDACTION_PATTERN as unknown as string;
+        if (typeof pattersnString == 'string') {
+            customPatterns = pattersnString
                 .split(',')
                 .map(p => p.trim())
                 .filter(p => p.length > 0)
@@ -45,7 +46,7 @@ if (keys.REDACTION_PATTERN) {
     }
 }
 
-export function redact(text, options = {}) {
+export function redact(text: string, options: { redactEmails?: boolean; redactUsernames?: boolean; redactCustom?: boolean } = {}) {
     if (!text || typeof text !== 'string') {
         return text;
     }
