@@ -5,12 +5,13 @@ import { safePathApproval } from './approval.js';
 
 export function parseCommands(string = '') {
     const regex = /(?:^|[\s(])@((?:workspace)|(?:\.\.?[\/\\][^\s),;:!?]+))/g;
-    return Array.from(string.matchAll(regex), match => match[1].replace(/[),.;:!?]+$/, ''));
+    return Array.from(string.matchAll(regex), match => match[1]?.replace(/[),.;:!?]+$/, ''));
 }
 
 export async function addUserContext(string = '') {
     let context = '';
     const commands = parseCommands(string);
+    if(commands.length === 0) return null;
     if (commands.length > 0) context += 'Context: \n';
 
     for (const command of commands) {
@@ -19,11 +20,15 @@ export async function addUserContext(string = '') {
                 const toolResult = execFileSync('ls', ['-la'], { encoding: 'utf-8', timeout: 10000, cwd: process.cwd() });
                 context += `Workspace: ls -la \n${toolResult}\n`;
             } catch (error) {
+                if(error instanceof Error) {
                 context += `Workspace: ls -la \nError: ${error.message}\n`;
+                } else {
+                    throw error;
+                }
             }
             continue;
         }
-
+        if(!command) continue;
         if (command.startsWith('./') || command.startsWith('.\\') || command.startsWith('../') || command.startsWith('..\\')) {
             const approval = await safePathApproval(command, true);
             const toolResult = approval.status ? readFile(command) : approval.reason;
