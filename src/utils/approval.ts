@@ -3,17 +3,23 @@ import { autoApprove } from '../config.js';
 import { askQuestion } from './askQuestion.js';
 import { keys } from '../config/keys.js';
 import { isGitignored, resolveWorkspacePath } from './pathSecurity.js';
+import type { FinalToolCall } from '../index.js';
 
-export async function getApprovalRequirements(toolCalls = []) {
+export async function getApprovalRequirements(toolCalls: FinalToolCall[] = []) {
     const mode = autoApprove.default;
-
     if (mode === 'allow') return { execApproval: false, sendingApproval: false };
     if (mode === 'block') return { execApproval: true, sendingApproval: true };
 
     if (mode === 'manual') {
         return {
-            execApproval: toolCalls.some(call => autoApprove[call.function?.name]?.promptExecution === true),
-            sendingApproval: toolCalls.some(call => autoApprove[call.function?.name]?.promptSending === true),
+            execApproval: toolCalls.some(call => {
+                let config = autoApprove[call.function?.name as keyof typeof autoApprove] as { promptExecution?: boolean } | undefined;
+                return config?.promptExecution === true
+            }),
+            sendingApproval: toolCalls.some(call => {
+                let config = autoApprove[call.function?.name as keyof typeof autoApprove] as { promptSending?: boolean } | undefined;
+                return config?.promptSending === true
+            }),
         };
     }
 
@@ -44,7 +50,7 @@ export async function getApprovalRequirements(toolCalls = []) {
     return { execApproval: true, sendingApproval: true };
 }
 
-export async function safePathApproval(filePath, noPrompt = false) {
+export async function safePathApproval(filePath: string, noPrompt = false) {
     const resolved = resolveWorkspacePath(filePath);
     const denied = { status: false, reason: resolved.reason };
 
@@ -53,7 +59,7 @@ export async function safePathApproval(filePath, noPrompt = false) {
         return denied;
     }
 
-    if (isGitignored(resolved.realPath) && keys?.gitIgnoreUnsafePaths) {
+    if (isGitignored(resolved.realPath!) && keys?.gitIgnoreUnsafePaths) {
         const reason = `Path is marked as unsafe by .gitignore: ${filePath}`;
         if (noPrompt) return { status: false, reason };
 
