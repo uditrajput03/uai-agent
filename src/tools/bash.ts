@@ -33,7 +33,7 @@ const WINDOWS_ABSOLUTE_PATH = /^[A-Za-z]:/;
 const ABSOLUTE_PATH_SEGMENT = /(^|[\s:=])\/(?!\/)/;
 const TRAVERSAL_SEGMENT = /(^|[\\/])\.\.([\\/]|$)/;
 
-function tokenize(command) {
+function  tokenize(command: string) {
     const tokens = [];
     let current = '';
     let quote = null;
@@ -74,12 +74,12 @@ function tokenize(command) {
     }
 
     if (escaped) current += '\\';
-    if (quote) return { ok: false, reason: 'Command blocked: unterminated quote' };
+    if (quote) return { ok: false, reason: 'Command blocked: unterminated quote' } as const;
     if (current) tokens.push(current);
-    return { ok: true, tokens };
+    return { ok: true, tokens } as const;
 }
 
-function isCommandBlocked(command) {
+function isCommandBlocked(command: string) {
     const lower = command.toLowerCase();
     for (const blocked of BLOCKED_COMMANDS) {
         if (lower.includes(blocked.toLowerCase())) return { blocked: true, pattern: blocked };
@@ -87,12 +87,12 @@ function isCommandBlocked(command) {
     return { blocked: false, pattern: null };
 }
 
-function isDestructive(command) {
+function isDestructive(command: string) {
     const lower = command.toLowerCase();
     return DESTRUCTIVE_COMMANDS.some(pattern => lower.includes(pattern.toLowerCase()));
 }
 
-function tokenContainsUnsafePath(token) {
+function tokenContainsUnsafePath(token: string) {
     return token.startsWith('~')
         || token.includes('~/')
         || token.includes('~\\')
@@ -103,7 +103,7 @@ function tokenContainsUnsafePath(token) {
         || token.includes('..\\');
 }
 
-function validateWorkspacePathToken(token) {
+function validateWorkspacePathToken(token: string): { ok: true } | { ok: false, reason: string } {
     // Plain paths can be resolved directly. Embedded paths (e.g. --file=/tmp/x,
     // script snippets, URLs) are rejected instead of trying to parse intent.
     const looksPlainPath = token.startsWith('/') || token.startsWith('../') || token.startsWith('..\\')
@@ -113,7 +113,7 @@ function validateWorkspacePathToken(token) {
         const pathCheck = WINDOWS_ABSOLUTE_PATH.test(token)
             ? { ok: false, reason: `Path outside workspace is not allowed: ${token}` }
             : resolveWorkspacePath(token, { requireParent: false });
-        if (!pathCheck.ok) return { ok: false, reason: pathCheck.reason };
+        if (!pathCheck.ok) return { ok: false, reason: pathCheck.reason || "Invalid workspace path" };
         return { ok: true };
     }
 
@@ -123,7 +123,7 @@ function validateWorkspacePathToken(token) {
     return { ok: true };
 }
 
-function validateCommandSpecificRules(base, args) {
+function validateCommandSpecificRules(base: string, args: string[]): { ok: true } | { ok: false, reason: string } {
     if (base === 'node') {
         const forbidden = new Set(['-e', '--eval', '-p', '--print', '--input-type']);
         const hasEval = args.some(arg => forbidden.has(arg) || arg.startsWith('--eval=') || arg.startsWith('--print='));
@@ -155,7 +155,7 @@ function validateCommandSpecificRules(base, args) {
     return { ok: true };
 }
 
-function validateCommand(command) {
+function validateCommand(command: string): { ok: true, tokens: string[] } | { ok: false, reason: string } {
     if (typeof command !== 'string' || command.trim() === '') {
         return { ok: false, reason: 'Command must be a non-empty string' };
     }
@@ -171,12 +171,12 @@ function validateCommand(command) {
     if (tokens.length === 0) return { ok: false, reason: 'Command must be a non-empty string' };
 
     const [base, ...args] = tokens;
-    if (base.includes('/') || base.includes('\\') || base.startsWith('.')) {
+    if (base?.includes('/') || base?.includes('\\') || base?.startsWith('.')) {
         return { ok: false, reason: 'Command blocked: executable path is not allowed' };
     }
-    if (!ALLOWED_COMMANDS.has(base)) return { ok: false, reason: `Command not on allowlist: ${base}` };
+    if (!ALLOWED_COMMANDS.has(base!)) return { ok: false, reason: `Command not on allowlist: ${base}` };
 
-    const commandRules = validateCommandSpecificRules(base, args);
+    const commandRules = validateCommandSpecificRules(base!, args);
     if (!commandRules.ok) return commandRules;
 
     for (const token of args) {
@@ -188,13 +188,13 @@ function validateCommand(command) {
     return { ok: true, tokens };
 }
 
-export async function safeBashApproval(command) {
+export async function safeBashApproval(command: string) {
     const validation = validateCommand(command);
     if (!validation.ok) return { approved: false, reason: validation.reason };
 
     const base = validation.tokens[0];
     const isSafeGit = command.startsWith('git status') || command.startsWith('git log') || command.startsWith('git diff');
-    const autoSafe = AUTO_SAFE_COMMANDS.has(base) || isSafeGit;
+    const autoSafe = AUTO_SAFE_COMMANDS.has(base!) || isSafeGit;
     if (autoSafe && !isDestructive(command)) {
         return { approved: true, reason: `Auto-approved safe command: ${command.trim()}` };
     }
@@ -218,12 +218,12 @@ function getSafeEnvironment() {
     );
 }
 
-export async function bash(command, options = {}) {
+export async function bash(command: string, options: { timeout?: number; maxBuffer?: number } = {}) {
     const validation = validateCommand(command);
     if (!validation.ok) throw new Error(validation.reason);
 
     const [file, ...args] = validation.tokens;
-    const { stdout, stderr } = await execFileAsync(file, args, {
+    const { stdout, stderr } = await execFileAsync(file!, args, {
         cwd: process.cwd(),
         env: getSafeEnvironment(),
         timeout: options.timeout ?? 30000,
