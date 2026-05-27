@@ -39,6 +39,6 @@ temp/
 # Test files
 test.js
 # *.test.js
-config/keys.js
-/src/config/keys.js
+config/keys.*
+/src/config/keys.*
 .uai/
