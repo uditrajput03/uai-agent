@@ -1,43 +1,49 @@
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 
-// Singleton readline interface for better UX
-let rl = null;
-let savedHistory = [];
+type ReadlineWithHistory = readline.Interface & { history: string[] };
 
-function getReadline() {
+// Singleton readline interface for better UX
+let rl: ReadlineWithHistory | null = null;
+let savedHistory: string[] = [];
+
+function getReadline(): ReadlineWithHistory {
     if (!rl) {
-        rl = readline.createInterface({
+        const instance = readline.createInterface({
             input,
             output,
             historySize: 100,
             tabSize: 4
-        });
+        }) as ReadlineWithHistory;
+
+        rl = instance;
 
         // readline consumes Ctrl+C while a question is active and emits SIGINT on
         // the interface instead of the process. Forward it to the process-level
         // handler so Ctrl+C exits consistently from prompts, approval questions,
         // and normal chat input.
-        rl.on('SIGINT', () => {
+        instance.on('SIGINT', () => {
             process.emit('SIGINT');
         });
 
-        rl.history = savedHistory;
+        instance.history = savedHistory;
     }
     return rl;
 }
 
-export async function askQuestion(inputText) {
+export async function askQuestion(inputText: string) {
     if (process.env.NODE_ENV === 'test') {
-        return global.__MOCK_ASK_ANSWER !== undefined ? global.__MOCK_ASK_ANSWER : 'y';
+        return (global as any).__MOCK_ASK_ANSWER !== undefined ? (global as any).__MOCK_ASK_ANSWER : 'y';
     }
     const rlInstance = getReadline();
     try {
         return await rlInstance.question(inputText);
     } catch (error) {
         // Handle Ctrl+C gracefully
-        if (error.code === 'ABORT_ERR' || error.name === 'AbortError') {
-            return null;
+        if(error instanceof Error) {
+            if (error.name === 'AbortError') {
+                return null;
+            }
         }
         throw error;
     } finally {
@@ -53,7 +59,7 @@ export function closeReadline() {
     }
 }
 
-let blockInputHandler = null;
+let blockInputHandler: ((data: Buffer) => void) | null = null;
 
 export function pauseReadline() {
     if (process.stdin.isTTY) {

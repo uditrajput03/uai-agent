@@ -4,14 +4,15 @@ import fs from 'fs';
 import { askQuestion, closeReadline } from './askQuestion.js';
 import { models } from '../config.js';
 import { search } from '@inquirer/prompts';
+import type { MsgArray } from '../index.js';
 
-export function clearConversation(msgArray) {
+export function clearConversation(msgArray: MsgArray) {
     msgArray.length = 1;
     console.log(chalk.green('✓ Conversation history cleared.'));
     console.log('');
 }
 
-export function rewindConversation(msgArray) {
+export function rewindConversation(msgArray: MsgArray) {
     let removedCount = 0;
     let toolMessagesRemoved = 0;
 
@@ -35,16 +36,16 @@ export function rewindConversation(msgArray) {
     while (i > 0) {
         const msg = msgArray[i];
 
-        if (msg.role === 'tool') {
+        if (msg?.role === 'tool') {
             msgArray.splice(i, 1);
             toolMessagesRemoved++;
             removedCount++;
             i--;
-        } else if (msg.role === 'assistant') {
+        } else if (msg?.role === 'assistant') {
             msgArray.splice(i, 1);
             removedCount++;
             i--;
-        } else if (msg.role === 'user') {
+        } else if (msg?.role === 'user') {
             // Found the last user message - remove it and stop
             msgArray.splice(i, 1);
             removedCount++;
@@ -68,7 +69,7 @@ export function rewindConversation(msgArray) {
     console.log('');
 }
 
-export async function exportConversation(msgArray, provider, model, __dirname) {
+export async function exportConversation(msgArray: MsgArray, provider: string, model: string, __dirname: string) {
     // Include user, assistant, and tool messages
     const chatMessages = msgArray.filter(msg => msg.role === 'user' || msg.role === 'assistant' || msg.role === 'tool');
 
@@ -101,7 +102,7 @@ export async function exportConversation(msgArray, provider, model, __dirname) {
             }
         } else if (msg.role === 'tool') {
             markdown += `## 🔧 Tool Response\n\n`;
-            markdown += `**Tool Call ID:** \`${msg.tool_call_id}\`\n\n`;
+            markdown += `**Tool Call ID:** \`${msg?.tool_call_id}\`\n\n`;
             markdown += `\`\`\`\n${msg.content}\n\`\`\`\n\n`;
         }
         markdown += `---\n\n`;
@@ -118,7 +119,11 @@ export async function exportConversation(msgArray, provider, model, __dirname) {
         fs.writeFileSync(exportPath, markdown, 'utf-8');
         console.log(chalk.green(`✓ Chat history exported to: ${finalFilename}`));
     } catch (error) {
-        console.error(chalk.red('✗ Error exporting chat history:'), error.message);
+        if(error instanceof Error) {
+            console.error(chalk.red('✗ Error exporting chat history:'), error.message);
+        } else {
+            console.error(chalk.red('✗ Error exporting chat history:'), error);
+        }
     }
     console.log('');
 }
@@ -129,11 +134,11 @@ export function exitAgent() {
     process.exit(0);
 }
 
-export function getSessionsDir(projectRoot) {
+export function getSessionsDir(projectRoot: string) {
     return path.resolve(projectRoot, '.uai', 'sessions');
 }
 
-export function saveSession(msgArray, projectRoot, sessionName = 'session.json') {
+export function saveSession(msgArray: MsgArray, projectRoot: string, sessionName = 'session.json') {
     const sessionsDir = getSessionsDir(projectRoot);
     if (!fs.existsSync(sessionsDir)) {
         fs.mkdirSync(sessionsDir, { recursive: true });
@@ -142,7 +147,7 @@ export function saveSession(msgArray, projectRoot, sessionName = 'session.json')
     fs.writeFileSync(sessionPath, JSON.stringify(msgArray, null, 2), 'utf-8');
 }
 
-export async function saveSessionCommand(msgArray, projectRoot, sessionName = 'session.json') {
+export async function saveSessionCommand(msgArray: MsgArray, projectRoot: string, sessionName = 'session.json') {
     const filenameInput = await askQuestion(chalk.yellow(`Enter session name (default: ${sessionName}): `));
     const rawFilename = filenameInput?.trim() || sessionName;
     const safeBaseName = path.basename(rawFilename).replace(/[\\/]/g, '') || sessionName;
@@ -152,7 +157,11 @@ export async function saveSessionCommand(msgArray, projectRoot, sessionName = 's
         saveSession(msgArray, projectRoot, finalFilename);
         console.log(chalk.green(`✓ Session saved successfully to .uai/sessions/${finalFilename}.`));
     } catch (err) {
-        console.error(chalk.red('✗ Error saving session:'), err.message);
+        if (err instanceof Error) {
+            console.error(chalk.red('✗ Error saving session:'), err.message);
+        } else {
+            console.error(chalk.red('✗ Error saving session:'), err);
+        }
     }
     console.log('');
 }
@@ -178,7 +187,7 @@ export function showHelp() {
     console.log('');
 }
 
-export async function changeModel(context) {
+export async function changeModel(context: { config: { provider: string; model: string } }) {
     const { config } = context;
     const current = (config.provider && config.model)
         ? `${config.provider}/${config.model}`
@@ -187,7 +196,8 @@ export async function changeModel(context) {
     console.log(chalk.dim(`Current Model: ${current}\n`));
 
     // 1. Build all model choices
-    const allChoices = [];
+    let allChoices
+    allChoices = [];
     for (const [providerKey, providerData] of Object.entries(models)) {
         for (const [modelKey] of Object.entries(providerData)) {
             if (['apiKey', 'baseURL'].includes(modelKey)) continue;
@@ -227,7 +237,7 @@ export async function changeModel(context) {
     console.log(chalk.green(`\n✓ Model changed to: ${config.provider}/${config.model}\n`));
 }
 
-export async function loadSession(msgArray, projectRoot) {
+export async function loadSession(msgArray: MsgArray, projectRoot: string) {
     const sessionsDir = getSessionsDir(projectRoot);
     if (!fs.existsSync(sessionsDir)) {
         return;
@@ -238,11 +248,11 @@ export async function loadSession(msgArray, projectRoot) {
         return;
     }
 
-    const selection = global.__MOCK_SEARCH_RESULT || await search({
+    const selection: any = (global as any).__MOCK_SEARCH_RESULT || await search({
         message: 'Select a session to load:',
-        source: async (term, { signal } = {}) => {
+        source: async (term) => {
             if (!term) return files.map(f => ({ name: f, value: f }));
-
+``
             const lower = term.toLowerCase();
             return files.filter(f => f.toLowerCase().includes(lower))
                 .map(f => ({ name: f, value: f }));
@@ -267,7 +277,11 @@ export async function loadSession(msgArray, projectRoot) {
         msgArray.push(...parsed);
         console.log(chalk.green(`✓ Session loaded successfully from .uai/sessions/${selection}.`));
     } catch (err) {
-        console.error(chalk.red('✗ Error loading session:'), err.message);
+        if (err instanceof Error) {
+            console.error(chalk.red('✗ Error loading session:'), err.message);
+        } else {
+            console.error(chalk.red('✗ Error loading session:'), err);
+        }
     }
     console.log('');
 }
@@ -288,11 +302,11 @@ const commands = {
     exit: { fn: exitAgent, description: 'Exit the agent' },
 };
 
-export async function handleCommand(trimmedInput, context) {
+export async function handleCommand(trimmedInput: string, context: { msgArray: MsgArray; config: any; __dirname: string; sessionName: string }) {
     // Strip leading slash if present (e.g., "/model" → "model")
     const commandKey = trimmedInput.startsWith('/') ? trimmedInput.slice(1) : trimmedInput;
 
-    if (!commands[commandKey]) {
+    if (!(commandKey in commands)) {
         if (trimmedInput.startsWith('/')) {
             console.log(chalk.yellow(`⚠ Unknown command: ${commandKey}`));
             console.log(chalk.dim('Type /help for a list of available commands.\n'));
@@ -301,23 +315,22 @@ export async function handleCommand(trimmedInput, context) {
         return false;
     }
 
-    const command = commands[commandKey];
     const { msgArray, config, __dirname, sessionName } = context;
     const provider = config.provider || 'none';
     const model = config.model || 'none';
 
     if (commandKey === 'export') {
-        await command.fn(msgArray, provider, model, __dirname);
+        await commands[commandKey].fn(msgArray, provider, model, __dirname);
     } else if (commandKey === 'save') {
-        await command.fn(msgArray, __dirname, sessionName);
+        await commands[commandKey].fn(msgArray, __dirname, sessionName);
     } else if (commandKey === 'load' || commandKey === 'import') {
-        await command.fn(msgArray, __dirname);
+        await commands[commandKey].fn(msgArray, __dirname);
     } else if (commandKey === 'model') {
-        await command.fn(context);
-    } else if (['clear', 'rewind'].includes(commandKey)) {
-        command.fn(msgArray);
+        await commands[commandKey].fn(context);
+    } else if (commandKey === 'clear' || commandKey === 'rewind') {
+         commands[commandKey].fn(msgArray);
     } else {
-        command.fn();
+        await commands[commandKey as 'exit'].fn();
     }
 
     return true;
