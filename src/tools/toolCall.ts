@@ -4,6 +4,7 @@ import { readFile, writeFile, editFile } from './fsOps.js';
 import { bash, safeBashApproval } from './bash.js';
 import { redact } from '../utils/redact.js';
 import { safePathApproval } from '../utils/approval.js';
+import type { FinalToolCall } from '../index.js';
 
 /**
  * Each handler is an async function that receives the parsed input and
@@ -15,7 +16,7 @@ import { safePathApproval } from '../utils/approval.js';
 const toolHandlers = new Map();
 
 // ── bash ──
-toolHandlers.set('bash', async (input) => {
+toolHandlers.set('bash', async (input: Record<string, string>) => {
     if (!input?.command) {
         return 'Error: command is required for bash tool';
     }
@@ -32,12 +33,17 @@ toolHandlers.set('bash', async (input) => {
         const result = await bash(input.command);
         return result.stdout || result.stderr || 'Command executed with no output';
     } catch (error) {
-        return `Error executing bash command: ${error.message}`;
+        if(error instanceof Error) {
+            return `Error executing bash command: ${error.message}`;
+        }
+        else {
+            throw error;
+        }
     }
 });
 
 // ── read ──
-toolHandlers.set('read', async (input) => {
+toolHandlers.set('read', async (input: Record<string, string>) => {
     if (!input?.filePath) {
         return 'Error: filePath is required for read tool';
     }
@@ -54,7 +60,7 @@ toolHandlers.set('read', async (input) => {
 });
 
 // ── write ──
-toolHandlers.set('write', async (input) => {
+toolHandlers.set('write', async (input: Record<string, string>) => {
     if (!input?.filePath || input?.content === undefined) {
         return 'Error: filePath and content are required for write tool';
     }
@@ -71,7 +77,7 @@ toolHandlers.set('write', async (input) => {
 });
 
 // ── edit ──
-toolHandlers.set('edit', async (input) => {
+toolHandlers.set('edit', async (input: Record<string, string>) => {
     if (!input?.filePath || input?.oldContent === undefined || input?.newContent === undefined) {
         return 'Error: filePath, oldContent, and newContent are required for edit tool';
     }
@@ -87,7 +93,7 @@ toolHandlers.set('edit', async (input) => {
     return editFile(input.filePath, input.oldContent, input.newContent);
 });
 
-function parseToolInput(call) {
+function parseToolInput(call: FinalToolCall) {
     try {
         const input = call.function?.arguments
             ? JSON.parse(call.function.arguments)
@@ -98,14 +104,14 @@ function parseToolInput(call) {
     }
 }
 
-async function executeSingleTool(call) {
+async function executeSingleTool(call: FinalToolCall) {
     const toolName = call.function?.name;
     const toolCallId = call.id || `missing_tool_call_id_${Date.now()}`;
 
     // ── Parse input ──
     const { ok, input, error } = parseToolInput(call);
     if (!ok) {
-        return { role: 'tool', tool_call_id: toolCallId, content: error };
+        return { role: 'tool', tool_call_id: toolCallId, content: error } as const;
     }
 
     // ── Debug logging ──
@@ -122,7 +128,7 @@ async function executeSingleTool(call) {
             role: 'tool',
             tool_call_id: toolCallId,
             content: `Unknown tool or tool call input: ${toolName || 'unknown'}`
-        };
+        } as const;
     }
 
     const output = await handler(input);
@@ -132,7 +138,7 @@ async function executeSingleTool(call) {
         role: 'tool',
         tool_call_id: toolCallId,
         content: redact(output)
-    };
+    } as const;
 }
 
 /**
@@ -142,7 +148,7 @@ async function executeSingleTool(call) {
  * @param {Array} finalToolCalls - Array of tool-call objects from the AI
  * @returns {Array|string} Array of { role, tool_call_id, content } objects
  */
-export async function toolCall(finalToolCalls) {
+export async function toolCall(finalToolCalls: FinalToolCall[]) {
     if (!finalToolCalls || !Array.isArray(finalToolCalls) || finalToolCalls.length === 0) {
         return 'Invalid tool call: no input provided';
     }
@@ -155,3 +161,5 @@ export async function toolCall(finalToolCalls) {
 
     return results;
 }
+
+export type ToolCallResponse = string | Awaited<ReturnType<typeof toolCall>>;
