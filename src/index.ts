@@ -3,10 +3,9 @@ import OpenAI from 'openai';
 import 'dotenv/config';
 import fs from 'fs';
 import { askQuestion, closeReadline, pauseReadline, resumeReadline } from './utils/askQuestion.js';
-import { toolCall } from './tools/toolCall.js';
-import { models } from './config.js';
+import { toolCall, type ToolCallResponse } from './tools/toolCall.js';
+import { models, type AvailableModel, type Provider } from './config.js';
 import chalk from 'chalk';
-import { keys } from './config/keys.js';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,10 +15,11 @@ import { tools } from './config/tools.js';
 import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from './utils/prints.js';
 import { changeModel, handleCommand, saveSession } from './utils/commands.js';
 import { getApprovalRequirements } from './utils/approval.js';
+import { keys } from './config/keys.js';
 // ============================================
 // CONFIGURATION
 // ============================================
-const config = {
+const config: { provider: Provider, model: AvailableModel } = {
     provider: keys.defaultProvider,
     model: keys.defaultModel,
 };
@@ -33,12 +33,32 @@ if (!config.provider || !config.model) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const systemPath = path.resolve(__dirname, 'config/SYSTEM.md');
+const systemPath = path.resolve(__dirname, '../config/SYSTEM.md');
 const systemPrompt = fs.readFileSync(systemPath, 'utf-8');
 
-const msgArray = [
+interface Message {
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string | undefined | null;
+    tool_calls?: FinalToolCall[];
+    tool_call_id?: string;
+}
+
+interface ToolCall {
+    index: number
+    id: string;
+    type: string;
+    function: {
+        name: string;
+        arguments: string;
+    };
+}
+
+export type FinalToolCall = Omit<ToolCall, 'index'>;
+
+const msgArray: Message[] = [
     { "role": "system", "content": systemPrompt }
 ];
+export type MsgArray = typeof msgArray;
 
 const sessionName = `session-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 
@@ -66,9 +86,10 @@ process.on('SIGTERM', () => {
 async function main() {
     let outmsg = '';
     let inputMsg = '';
-    let toolResponse = '';
-    let finalToolCalls = {};
-    let lastMessageWasTool = msgArray.length > 0 && msgArray[msgArray.length - 1].role === 'tool';
+    let toolResponse: ToolCallResponse = "";
+    let finalToolCalls: Record<number, FinalToolCall> = {};
+    let finalToolCallsArray: FinalToolCall[] = [];
+    let lastMessageWasTool = msgArray.length > 0 && msgArray[msgArray.length - 1]?.role === 'tool';
 
     // Initialize OpenAI client dynamically to support provider/model switching
     const openai = new OpenAI({
@@ -112,9 +133,9 @@ async function main() {
 
     try {
         pauseReadline();
-
+        const modelConfig = (models[config.provider] as Record<string, any>)[config.model];
         const completion = await openai.chat.completions.create({
-            ...models[config.provider][config.model],
+            ...modelConfig,
             messages: msgArray,
             tools: tools,
             stream: true,
@@ -125,14 +146,14 @@ async function main() {
         console.log(chalk.cyan.bold('Assistant:'));
 
         let isFirstChunk = true;
-        for await (const chunk of completion) {
+        for await (const chunk of completion as any) {
             if (keys.DEBUG === true) {
-                let toLog = chunk.choices[0]?.delta?.tool_calls
+                let toLog: any = chunk.choices[0]?.delta?.tool_calls;
                 // if (toLog) console.log(toLog);
             }
-            let content = chunk.choices[0]?.delta?.content || '';
-            let reasoning = chunk.choices[0]?.delta?.reasoning_content;
-            let toolCalls = chunk.choices[0]?.delta?.tool_calls;
+            let content:string = chunk.choices[0]?.delta?.content || '';
+            let reasoning: string = chunk.choices[0]?.delta?.reasoning_content;
+            let toolCalls: ToolCall[] = chunk.choices[0]?.delta?.tool_calls;
 
             if (reasoning) {
                 if (keys.showThinking === true) {
@@ -178,30 +199,36 @@ async function main() {
         printSeparator();
 
     } catch (error) {
-        resumeReadline();
-        process.stdout.write('\r' + ' '.repeat(20) + '\r');
-        console.error(chalk.red('✗ Error during AI API call:'), error.message);
+        if(error instanceof Error) {
 
-        // FIX: Pause execution and wait for user input to break the infinite loop
-        const action = await askQuestion(chalk.yellow('⚠ Press Enter to retry, or type "cancel" to abort: '));
-
-        if (action?.trim().toLowerCase() === 'cancel') {
-            msgArray.pop();
-            console.log(chalk.red('✗ Action cancelled.'));
-        } else if (!lastMessageWasTool) {
-            msgArray.pop();
-            console.log(chalk.dim('Tip: Press the Up arrow key to quickly retrieve your previous message.'));
+            resumeReadline();
+            process.stdout.write('\r' + ' '.repeat(20) + '\r');
+            console.error(chalk.red('✗ Error during AI API call:'), error.message);
+            
+            // FIX: Pause execution and wait for user input to break the infinite loop
+            const action = await askQuestion(chalk.yellow('⚠ Press Enter to retry, or type "cancel" to abort: '));
+            
+            if (action?.trim().toLowerCase() === 'cancel') {
+                msgArray.pop();
+                console.log(chalk.red('✗ Action cancelled.'));
+            } else if (!lastMessageWasTool) {
+                msgArray.pop();
+                console.log(chalk.dim('Tip: Press the Up arrow key to quickly retrieve your previous message.'));
+            }
+            
+            return;
         }
-
-        return;
+        else {
+            throw error;
+        }
     }
 
     if (finalToolCalls && Object.keys(finalToolCalls).length > 0) {
-        finalToolCalls = Object.values(finalToolCalls);
+        finalToolCallsArray = Object.values(finalToolCalls);
         if (keys.DEBUG === true) {
-            console.log(JSON.stringify(finalToolCalls, null, 2));
+            console.log(JSON.stringify(finalToolCallsArray, null, 2));
         }
-        msgArray.push({ "role": "assistant", "content": null, tool_calls: finalToolCalls });
+        msgArray.push({ "role": "assistant", "content": null, tool_calls: finalToolCallsArray });
     }
     else {
         msgArray.push({ "role": "assistant", "content": outmsg });
@@ -209,9 +236,9 @@ async function main() {
     // Add assistant response to conversation
 
     // Check for tool calls
-    if (finalToolCalls && finalToolCalls.length > 0) {
-        printToolCallInfo(finalToolCalls);
-        const { execApproval } = await getApprovalRequirements(finalToolCalls);
+    if (finalToolCallsArray && finalToolCallsArray.length > 0) {
+        printToolCallInfo(finalToolCallsArray);
+        const { execApproval } = await getApprovalRequirements(finalToolCallsArray);
         let confirmation;
         if (execApproval) {
             confirmation = await askQuestion(chalk.yellow('Execute this tool call? (y/N): '));
@@ -222,21 +249,26 @@ async function main() {
         } else {
             console.log(chalk.green('✓ Executing tool...'));
             try {
-                const response = await toolCall(finalToolCalls);
+                const response = await toolCall(finalToolCallsArray);
                 if (Array.isArray(response) && response.length > 0) {
                     toolResponse = response;
                 } else {
                     toolResponse = "\nTool executed successfully with no response.";
                 }
             } catch (error) {
-                toolResponse = `\nError executing tool call: ${error.message}`;
-                console.error(chalk.red('✗') + chalk.red(toolResponse));
+                if(error instanceof Error) {
+                    toolResponse = `\nError executing tool call: ${error.message}`;
+                    console.error(chalk.red('✗') + chalk.red(toolResponse));
+                }
+                else {
+                    throw error;
+                }
             }
         }
     }
     if (toolResponse) {
-        printToolResponse(toolResponse, finalToolCalls);
-        const { sendingApproval } = await getApprovalRequirements(finalToolCalls);
+        printToolResponse(toolResponse, finalToolCallsArray);
+        const { sendingApproval } = await getApprovalRequirements(finalToolCallsArray);
         let confirmation;
         if (sendingApproval) {
             confirmation = await askQuestion(chalk.yellow('Send this response to the agent? (Y/n): '));
@@ -255,6 +287,7 @@ async function main() {
         }
     }
     finalToolCalls = {};
+    finalToolCallsArray = [];
 
     saveSession(msgArray, __dirname, sessionName);
 }

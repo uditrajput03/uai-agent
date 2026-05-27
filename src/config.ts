@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import { keys } from './config/keys.js';
 
+type GetModels = {
+    [K in keyof typeof models]: keyof Omit<typeof models[K], 'apiKey' | 'baseURL'>;
+}
+export type Provider = keyof typeof models;
+export type AvailableModel = GetModels[keyof GetModels];
 export const models = {
     cloudflare: {
         apiKey: keys.WORKER_AI.split(':')[1],
