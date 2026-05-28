@@ -11,7 +11,7 @@ export function parseCommands(string = '') {
 export async function addUserContext(string = '') {
     let context = '';
     const commands = parseCommands(string);
-    if(commands.length === 0) return null;
+    if(commands.length === 0) return '';
     if (commands.length > 0) context += 'Context: \n';
 
     for (const command of commands) {
