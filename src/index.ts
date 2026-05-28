@@ -20,8 +20,8 @@ import { keys } from './config/keys.js';
 // CONFIGURATION
 // ============================================
 const config: { provider: Provider, model: AvailableModel } = {
-    provider: keys.defaultProvider,
-    model: keys.defaultModel,
+    provider: keys.defaultProvider as Provider,
+    model: keys.defaultModel as AvailableModel,
 };
 
 if (!config.provider || !config.model) {
