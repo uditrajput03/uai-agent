@@ -13,24 +13,42 @@ import type { FinalToolCall } from '../index.js';
  * To add a new tool, simply add a new entry to this Map — no need to
  * touch any other part of this file.
  */
-const toolHandlers = new Map();
+type ToolName = 'bash' | 'read' | 'write' | 'edit';
+type ToolInput = Record<string, unknown>;
+type ToolHandler = (input: ToolInput) => Promise<string>;
+
+function isToolInput(input: unknown): input is ToolInput {
+    return typeof input === 'object' && input !== null && !Array.isArray(input);
+}
+
+function getStringField(input: ToolInput, field: string) {
+    const value = input[field];
+    return typeof value === 'string' ? value : undefined;
+}
+
+const toolHandlers = new Map<ToolName, ToolHandler>();
+
+function isToolName(toolName: string | undefined): toolName is ToolName {
+    return toolName === 'bash' || toolName === 'read' || toolName === 'write' || toolName === 'edit';
+}
 
 // ── bash ──
-toolHandlers.set('bash', async (input: Record<string, string>) => {
-    if (!input?.command) {
+toolHandlers.set('bash', async (input) => {
+    const command = getStringField(input, 'command');
+    if (!command) {
         return 'Error: command is required for bash tool';
     }
 
     // Skip approval check if autoApprove.default is set to 'allow'
     if (autoApprove.default !== 'allow') {
-        const approval = await safeBashApproval(input.command);
+        const approval = await safeBashApproval(command);
         if (!approval.approved) {
-            return approval.reason;
+            return approval.reason || 'Command execution denied by user.';
         }
     }
 
     try {
-        const result = await bash(input.command);
+        const result = await bash(command);
         return result.stdout || result.stderr || 'Command executed with no output';
     } catch (error) {
         if(error instanceof Error) {
@@ -43,63 +61,70 @@ toolHandlers.set('bash', async (input: Record<string, string>) => {
 });
 
 // ── read ──
-toolHandlers.set('read', async (input: Record<string, string>) => {
-    if (!input?.filePath) {
+toolHandlers.set('read', async (input) => {
+    const filePath = getStringField(input, 'filePath');
+    if (!filePath) {
         return 'Error: filePath is required for read tool';
     }
 
     // Skip approval check if autoApprove.default is set to 'allow'
     if (autoApprove.default !== 'allow') {
-        const approval = await safePathApproval(input.filePath);
+        const approval = await safePathApproval(filePath);
         if (!approval.status) {
-            return approval.reason;
+            return approval.reason || 'Path approval denied.';
         }
     }
 
-    return readFile(input.filePath);
+    return readFile(filePath);
 });
 
 // ── write ──
-toolHandlers.set('write', async (input: Record<string, string>) => {
-    if (!input?.filePath || input?.content === undefined) {
+toolHandlers.set('write', async (input) => {
+    const filePath = getStringField(input, 'filePath');
+    const content = getStringField(input, 'content');
+    if (!filePath || content === undefined) {
         return 'Error: filePath and content are required for write tool';
     }
 
     // Skip approval check if autoApprove.default is set to 'allow'
     if (autoApprove.default !== 'allow') {
-        const approval = await safePathApproval(input.filePath);
+        const approval = await safePathApproval(filePath);
         if (!approval.status) {
-            return approval.reason;
+            return approval.reason || 'Path approval denied.';
         }
     }
 
-    return writeFile(input.filePath, input.content);
+    return writeFile(filePath, content);
 });
 
 // ── edit ──
-toolHandlers.set('edit', async (input: Record<string, string>) => {
-    if (!input?.filePath || input?.oldContent === undefined || input?.newContent === undefined) {
+toolHandlers.set('edit', async (input) => {
+    const filePath = getStringField(input, 'filePath');
+    const oldContent = getStringField(input, 'oldContent');
+    const newContent = getStringField(input, 'newContent');
+    if (!filePath || oldContent === undefined || newContent === undefined) {
         return 'Error: filePath, oldContent, and newContent are required for edit tool';
     }
 
     // Skip approval check if autoApprove.default is set to 'allow'
     if (autoApprove.default !== 'allow') {
-        const approval = await safePathApproval(input.filePath);
+        const approval = await safePathApproval(filePath);
         if (!approval.status) {
-            return approval.reason;
+            return approval.reason || 'Path approval denied.';
         }
     }
 
-    return editFile(input.filePath, input.oldContent, input.newContent);
+    return editFile(filePath, oldContent, newContent);
 });
 
-function parseToolInput(call: FinalToolCall) {
+function parseToolInput(call: FinalToolCall): { ok: true, input: ToolInput } | { ok: false, error: string } {
     try {
-        const input = call.function?.arguments
+        const parsed: unknown = call.function?.arguments
             ? JSON.parse(call.function.arguments)
             : {};
+        const input = isToolInput(parsed) ? parsed : {};
         return { ok: true, input };
-    } catch (e) {
+    } catch {
         return { ok: false, error: `Error: Invalid JSON tool call arguments returned by model.` };
     }
 }
@@ -109,19 +134,19 @@ async function executeSingleTool(call: FinalToolCall) {
     const toolCallId = call.id || `missing_tool_call_id_${Date.now()}`;
 
     // ── Parse input ──
-    const { ok, input, error } = parseToolInput(call);
-    if (!ok) {
-        return { role: 'tool', tool_call_id: toolCallId, content: error } as const;
+    const parsed = parseToolInput(call);
+    if (!parsed.ok) {
+        return { role: 'tool', tool_call_id: toolCallId, content: parsed.error } as const;
     }
 
     // ── Debug logging ──
     if (keys.DEBUG === true) {
         console.log('Tool Call - tool:', toolName);
-        console.log('Tool Call - Input:', input);
+        console.log('Tool Call - Input:', parsed.input);
     }
 
     // ── Dispatch to handler ──
-    const handler = toolHandlers.get(toolName);
+    const handler = isToolName(toolName) ? toolHandlers.get(toolName) : undefined;
     if (!handler) {
         console.log(`Unknown tool requested: ${toolName}`);
         return {
@@ -131,7 +156,7 @@ async function executeSingleTool(call: FinalToolCall) {
         } as const;
     }
 
-    const output = await handler(input);
+    const output = await handler(parsed.input);
 
     // ── Redact & return ──
     return {
