@@ -214,7 +214,7 @@ export async function changeModel(context: { config: { provider: string; model: 
     // 2. Trigger the search prompt
     const selection = await search({
         message: 'Search for a model:',
-        source: async (term, { signal }) => {
+        source: async (term) => {
             if (!term) return allChoices;
 
             const lower = term.toLowerCase();

@@ -71,6 +71,14 @@ describe('toolCall', () => {
         assert.match((await toolCall(invalid))[0].content, /Invalid JSON/);
     });
 
+    it('treats valid non-object JSON arguments as missing arguments', async () => {
+        for (const args of ['null', '[]', '"text"', '42']) {
+            const result = await toolCall([{ id: `bad-${args}`, type: 'function', function: { name: 'read', arguments: args } }]);
+            assert.strictEqual(result.length, 1);
+            assert.match(result[0].content, /filePath is required/);
+        }
+    });
+
     it('handles multiple calls', async () => {
         fs.writeFileSync('one.txt', 'one');
         fs.writeFileSync('two.txt', 'two');
