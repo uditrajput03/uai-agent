@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 
-const commandsModule = await import('../utils/commands.js');
+const commandsModule = await import('../src/utils/commands.ts');
 const {
     clearConversation,
     rewindConversation,

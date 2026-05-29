@@ -3,8 +3,8 @@ import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
 
-const { getApprovalRequirements, safePathApproval } = await import('../utils/approval.js');
-const { autoApprove } = await import('../config.js');
+const { getApprovalRequirements, safePathApproval } = await import('../src/utils/approval.ts');
+const { autoApprove } = await import('../src/config.ts');
 
 describe('approval', () => {
     const testDir = path.join('test', '_temp_approval');

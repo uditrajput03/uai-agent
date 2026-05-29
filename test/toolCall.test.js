@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
 
-const { toolCall } = await import('../tools/toolCall.js');
+const { toolCall } = await import('../src/tools/toolCall.ts');
 
 describe('toolCall', () => {
     const testDir = path.join('test', '_temp_toolcall');

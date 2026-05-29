@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
-import { bash, safeBashApproval, validateCommand, BLOCKED_COMMANDS, DESTRUCTIVE_COMMANDS } from '../tools/bash.js';
+import { bash, safeBashApproval, validateCommand, BLOCKED_COMMANDS, DESTRUCTIVE_COMMANDS } from '../src/tools/bash.ts';
 
 function assertInvalid(command, pattern) {
     const result = validateCommand(command);

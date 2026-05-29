@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from '../utils/prints.js';
+import { printWelcome, printSeparator, printToolCallInfo, printToolResponse } from '../src/utils/prints.ts';
 
 describe('prints', () => {
     let mockConsoleLog;

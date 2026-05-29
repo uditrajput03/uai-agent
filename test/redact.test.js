@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { redact } from '../utils/redact.js';
+import { redact } from '../src/utils/redact.ts';
 
 describe('redact', () => {
     describe('Email redaction', () => {

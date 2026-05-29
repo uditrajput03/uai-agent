@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
-import { readFile, writeFile, editFile } from '../tools/fsOps.js';
+import { readFile, writeFile, editFile } from '../src/tools/fsOps.ts';
 
 function inTempWorkspace(name, fn) {
     const root = path.join('test', `_temp_${name}`);

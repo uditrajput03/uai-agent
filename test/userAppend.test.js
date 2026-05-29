@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
-import { parseCommands, addUserContext } from '../utils/userAppend.js';
+import { parseCommands, addUserContext } from '../src/utils/userAppend.ts';
 
 describe('userAppend', () => {
     const testDir = path.join('test', '_temp_userappend');
