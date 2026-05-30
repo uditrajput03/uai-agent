@@ -149,7 +149,7 @@ async function main() {
         for await (const chunk of completion as any) {
             if (keys.DEBUG === true) {
                 let toLog: any = chunk.choices[0]?.delta?.tool_calls;
-                // if (toLog) console.log(toLog);
+                if (toLog) console.log(toLog);
             }
             let content:string = chunk.choices[0]?.delta?.content || '';
             let reasoning: string = chunk.choices[0]?.delta?.reasoning_content;
